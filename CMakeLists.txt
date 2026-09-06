@@ -232,6 +232,7 @@ message(STATUS "LIBRAW_NODE_OPENMP: ${LIBRAW_NODE_OPENMP}")
 add_library(addon SHARED
   src/addon.cc
   src/errors.cc
+  src/fused.cc
   src/image_format.cc
   src/processor.cc)
 set_target_properties(addon PROPERTIES

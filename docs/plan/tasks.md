@@ -257,6 +257,22 @@ Acceptance:
   starts with `ff d8`; `decode({ params: { half_size: true } })` gives 384×288.
 - Real files: for `IMGP5127.DNG`, `identify` ≤ 15 ms, `thumbnail` ≤ 15 ms (paste timings).
 
+> **Correction (T08):** item 2's `thumbs[].tformat` is `thumbs_list[i].tformat`, whose type is
+> `enum LibRaw_internal_thumbnail_formats` (`libraw_const.h`) -- a different, differently-numbered enum
+> from both `libraw_processed_image_t::type` (`LIBRAW_IMAGE_JPEG` etc., what `src/image_format.h`'s
+> existing `ImageFormatName` maps) and `libraw_thumbnail_t::tformat` (`LIBRAW_THUMBNAIL_*`). Reusing
+> `ImageFormatName` for `thumbs[].tformat`, as an earlier draft of this task text suggested ("tformat
+> (string via image_format helper or 'unknown')"), silently mislabels entries whose internal-format number
+> collides with an unrelated `LIBRAW_IMAGE_*` one -- e.g. `LIBRAW_INTERNAL_THUMBNAIL_JPEG == 4 ==
+> LIBRAW_IMAGE_H265`, so a JPEG thumb's list entry would have read `tformat: "h265"`. T08 added a
+> dedicated `InternalThumbnailFormatName()` (`src/image_format.h/.cc`) instead. Separately,
+> `libraw_processed_image_t` (used by `thumbnail()`'s own result, item 3) carries no `width`/`height` for
+> JPEG/H265/JPEGXL thumbs -- `dcraw_make_mem_thumb` only fills those for the `LIBRAW_IMAGE_BITMAP` case
+> (`vendor/LibRaw/src/postprocessing/mem_image.cpp`) -- so `thumbnail()` sources `width`/`height` from
+> `imgdata.thumbnail.{twidth,theight}` (set from the matching `thumbs_list` entry by `unpack_thumb_ex`/
+> `unpack_thumb`, `vendor/LibRaw/src/decoders/unpack_thumb.cpp`) instead, which is populated for every
+> format.
+
 ### T09 — Cancellation via AbortSignal
 
 Read: `docs/how-to/implement-async-decode-with-cancellation.md` §3, §7.

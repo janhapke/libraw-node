@@ -61,4 +61,14 @@ constexpr const char* kErrLibRawBusyName = "ERR_LIBRAW_BUSY";
 Napi::Error MakeBusyError(Napi::Env env, const char* stage);
 void ThrowBusyError(Napi::Env env, const char* stage);
 
+// T08: the pre-aborted-signal shape for the fused helpers (decode/thumbnail)
+// -- docs/plan/tasks.md's T08 "if signal.aborted is already true at call
+// time, reject immediately with a LibRawError name: 'LIBRAW_CANCELLED_BY_
+// CALLBACK', code: -100010, aborted: true". Same code LibRaw itself uses for
+// LIBRAW_CANCELLED_BY_CALLBACK (see the T09 how-to doc's correction: -100010,
+// not -8), so this reuses MakeProcessorError for the message/code/librawName/
+// stage shape and only adds the JS-visible `aborted` flag on top. T09 reuses
+// this for cancellation *during* a call, not just before it starts.
+Napi::Error MakeCancelledError(Napi::Env env, const char* stage);
+
 }  // namespace libraw_node

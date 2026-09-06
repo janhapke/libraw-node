@@ -31,6 +31,7 @@
 
 #include "build_info.h"
 #include "errors.h"
+#include "fused.h"
 #include "processor.h"
 
 namespace {
@@ -84,6 +85,13 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
                     InstanceValue("buildInfo", MakeBuildInfo(env)),
                     InstanceMethod("decodeSync", &LibRawAddon::DecodeSync),
                     InstanceValue("Processor", processorCtor),
+                    // T08: fused, stateless module-level helpers (each a
+                    // free function -- src/fused.cc/.h -- backed by its own
+                    // Napi::AsyncWorker and its own LibRaw instance, so they
+                    // never interact with Processor's busy_ guard).
+                    InstanceValue("decode", Napi::Function::New(env, &libraw_node::Decode, "decode")),
+                    InstanceValue("identify", Napi::Function::New(env, &libraw_node::Identify, "identify")),
+                    InstanceValue("thumbnail", Napi::Function::New(env, &libraw_node::Thumbnail, "thumbnail")),
                 });
   }
 

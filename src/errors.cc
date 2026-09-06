@@ -79,4 +79,10 @@ void ThrowBusyError(Napi::Env env, const char* stage) {
   throw MakeBusyError(env, stage);
 }
 
+Napi::Error MakeCancelledError(Napi::Env env, const char* stage) {
+  Napi::Error err = MakeProcessorError(env, LIBRAW_CANCELLED_BY_CALLBACK, stage);
+  err.Set("aborted", Napi::Boolean::New(env, true));
+  return err;
+}
+
 }  // namespace libraw_node
