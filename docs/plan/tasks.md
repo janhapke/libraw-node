@@ -581,6 +581,15 @@ the human installs it and confirms RAW folders render (the only step needing a d
 
 ### T28 — Static OpenMP runtimes on macOS and Windows
 
+> **Linux is in scope too (added 2026-09-06 after T04):** the Linux prebuild currently links
+> `libgomp.so.1` dynamically because gcc-toolset-14's `libgomp.a` uses local-exec TLS and cannot be linked
+> into a shared object (verified: `readelf -r libgomp.a` shows 701 `R_X86_64_TPOFF32` relocations). The
+> sidecar-free goal from `docs/explanation/build-and-distribution-strategy.md` therefore needs one of:
+> (a) LLVM `libomp` built from source with `-fPIC` and linked statically on Linux as well (its `GOMP_*`
+> compatibility layer lets gcc `-fopenmp` objects link against it), or (b) accepting a `libgomp1` package
+> dependency for Linux consumers (photoview's `.deb` would declare it). **Decision pending with Jan.** Until
+> then `scripts/check-binary.sh` allows `libgomp.so.1` in NEEDED.
+
 Do: revisit `buildInfo.openmp === false` platforms; macOS `libomp.a` from Homebrew or built from LLVM
 source in the job; Windows clang-cl + `libomp` static or MSVC `/openmp` with `vcomp` static if licensing
 and availability allow. Benchmark via CI-run `npm run bench` on the synthetic large DNG (add a 6000×4000
