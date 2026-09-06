@@ -371,7 +371,7 @@ void ApplyParams(Napi::Env env, Napi::Object obj, libraw_output_params_t& params
     Napi::Value v = obj.Get("user_qual");
     if (!v.IsUndefined()) {
       double num = AsNumber(env, v, kLabel, "user_qual");
-      int value = CheckEnumMember(env, kLabel, "user_qual", num, {{"LINEAR", 0}, {"VNG", 1}, {"PPG", 2}, {"AHD", 3}, {"DCB", 4}, {"DHT", 11}, {"AAHD", 12}});
+      int value = CheckEnumMember(env, kLabel, "user_qual", num, {{"LINEAR", 0}, {"VNG", 1}, {"PPG", 2}, {"AHD", 3}, {"DCB", 4}, {"MODIFIED_AHD_GPL2", 5}, {"AFD_GPL2", 6}, {"VCD_GPL2", 7}, {"VCD_MODIFIED_AHD_GPL2", 8}, {"LMMSE_GPL2", 9}, {"AMAZE_GPL3", 10}, {"DHT", 11}, {"AAHD", 12}});
       params.user_qual = value;
     }
   }

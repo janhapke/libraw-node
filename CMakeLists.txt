@@ -232,6 +232,7 @@ message(STATUS "LIBRAW_NODE_OPENMP: ${LIBRAW_NODE_OPENMP}")
 add_library(addon SHARED
   src/addon.cc
   src/cancel.cc
+  src/enums.cc
   src/errors.cc
   src/events.cc
   src/fused.cc

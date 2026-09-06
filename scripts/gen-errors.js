@@ -19,6 +19,20 @@
 //   node scripts/gen-errors.js --check  exit 1 if committed files are stale
 //
 // `npm run gen:errors` runs the first form.
+//
+// T13 note: scripts/gen-enums.js parses LibRaw_errors again (independently)
+// into api/enums.json, a general-purpose manifest of *every* enum in
+// libraw_const.h that T15's docs/types generators and this task's
+// capabilityNames()/warningNames() consume. This script is kept as its own,
+// separate generator rather than folded into gen-enums.js because its two
+// outputs (src/generated/libraw_errors.inc's LIBRAW_NODE_ERROR_ENTRY table,
+// consumed by src/errors.cc, and lib/generated/libraw-errors.cjs's
+// CODE_TO_NAME/NAME_TO_CODE, consumed by lib/errors.cjs's LibRawError) predate
+// gen-enums.js (T06), have their own committed tests, and use a full-name
+// (not short-name) convention LibRawError's public shape already depends on
+// -- see docs/plan/tasks.md's T13 "Do" list ("keep gen-errors.js/
+// gen-progress.js as they are, or make them thin wrappers ... do not leave
+// duplicated parsing logic without a comment saying why").
 'use strict';
 
 const fs = require('node:fs');

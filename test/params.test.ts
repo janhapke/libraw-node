@@ -259,11 +259,16 @@ describe('Processor.setParams — negative cases (acceptance list)', () => {
         p.close();
     });
 
-    it('setParams({ user_qual: 7 }) throws a RangeError (7 is not an allowed enum value)', () => {
+    it('setParams({ user_qual: 13 }) throws a RangeError (13 is not an allowed enum value)', () => {
+        // T13: 5-10 (the LibRaw-demosaic-pack-GPL2/GPL3 algorithm numbers)
+        // were added to the user_qual enum -- unavailable in this build (they
+        // fall back to AHD with LIBRAW_WARN_FALLBACK_TO_AHD, see
+        // test/enums.test.ts), but no longer rejected by setParams itself, so
+        // this negative case now needs a value truly outside 0-12.
         const p = new (libraw as any).Processor();
         let thrown: any;
         try {
-            p.setParams({ user_qual: 7 });
+            p.setParams({ user_qual: 13 });
         } catch (err) {
             thrown = err;
         }

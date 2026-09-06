@@ -19,6 +19,16 @@
 //   node scripts/gen-progress.js --check  exit 1 if committed files are stale
 //
 // `npm run gen:progress` runs the first form.
+//
+// T13 note: scripts/gen-enums.js parses LibRaw_progress again (independently)
+// into api/enums.json, a general-purpose manifest of *every* enum in
+// libraw_const.h. This script stays separate for the same reason
+// gen-errors.js does (see that script's own T13 note): its outputs
+// (src/generated/libraw_progress_stages.inc, consumed by
+// src/progress_stage.cc, and lib/generated/libraw-progress.cjs's
+// STAGE_TO_NAME/NAME_TO_STAGE, consumed by lib/index.cjs's `progressStages`
+// export) predate gen-enums.js (T10), and `progressStages`' exact shape is
+// part of this package's already-documented public surface.
 'use strict';
 
 const fs = require('node:fs');

@@ -30,6 +30,7 @@
 #include <string>
 
 #include "build_info.h"
+#include "enums.h"
 #include "errors.h"
 #include "fused.h"
 #include "processor.h"
@@ -80,6 +81,17 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
                     InstanceMethod("version", &LibRawAddon::Version),
                     InstanceMethod("versionNumber", &LibRawAddon::VersionNumber),
                     InstanceMethod("capabilities", &LibRawAddon::Capabilities),
+                    // T13: capabilityNames() -- LibRaw::capabilities()'s set
+                    // bits (enum LibRaw_runtime_capabilities) as short names
+                    // (e.g. "ZLIB", "JPEG"), via the same generated table
+                    // src/fused.cc's warnings arrays now use.
+                    InstanceMethod("capabilityNames", &LibRawAddon::CapabilityNames),
+                    // T13: warningNames(mask) -- the same short-name lookup
+                    // decode()/identify()'s `warnings` field uses (enum
+                    // LibRaw_warnings), exposed standalone so a caller can
+                    // decode a raw process_warnings-shaped bitmask (e.g. one
+                    // it stored earlier) without calling decode() again.
+                    InstanceMethod("warningNames", &LibRawAddon::WarningNames),
                     InstanceMethod("cameraCount", &LibRawAddon::CameraCount),
                     InstanceMethod("cameraList", &LibRawAddon::CameraList),
                     InstanceValue("buildInfo", MakeBuildInfo(env)),
@@ -114,6 +126,19 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
 
   Napi::Value Capabilities(const Napi::CallbackInfo& info) {
     return Napi::Number::New(info.Env(), LibRaw::capabilities());
+  }
+
+  Napi::Value CapabilityNames(const Napi::CallbackInfo& info) {
+    return libraw_node::CapabilityNamesArray(info.Env(), static_cast<unsigned int>(LibRaw::capabilities()));
+  }
+
+  Napi::Value WarningNames(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    unsigned int mask = 0;
+    if (info.Length() > 0 && !info[0].IsUndefined()) {
+      mask = static_cast<unsigned int>(info[0].ToNumber().Int64Value());
+    }
+    return libraw_node::WarningsToArray(env, mask);
   }
 
   Napi::Value CameraCount(const Napi::CallbackInfo& info) {

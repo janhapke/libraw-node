@@ -12,6 +12,37 @@ This package is not scoped to any single consumer application — see
 
 Status: early scaffold (see `docs/plan/tasks.md` for the task breakdown driving development).
 
+## Enums and flags
+
+Every enum in LibRaw's `libraw_const.h` (warnings, capabilities, decoder flags, raw-unpack options,
+thumbnail/image formats, progress stages, error codes, colorspaces, camera-maker/mount/format indexes,
+...) is extracted by `scripts/gen-enums.js` into `api/enums.json` and re-exported from the package as
+`enums`, an object of named tables:
+
+```js
+const { enums, capabilityNames, warningNames, capabilities, decode } = require('@janhapke/libraw');
+
+enums.WARN.NAME_TO_VALUE.FALLBACK_TO_AHD;        // 32768 (1 << 15)
+enums.CAPS.NAME_TO_VALUE.ZLIB;                   // 64    (1 << 6)
+enums.all.LibRaw_processing_options.NAME_TO_VALUE.PENTAX_PS_ALLFRAMES; // every enum, by its C type name
+```
+
+`enums.all` has one entry per C enum name (e.g. `enums.all.LibRaw_warnings`); `enums.WARN`, `enums.CAPS`,
+`enums.DECODER`, `enums.RAWOPTIONS`, `enums.PROGRESS`, `enums.ERRORS`, `enums.THUMBNAIL_FORMATS`,
+`enums.INTERNAL_THUMBNAIL_FORMATS`, and `enums.IMAGE_FORMATS` are short aliases for the families most
+callers reach for. Each table is `{ kind: 'flags' | 'enum', NAME_TO_VALUE, VALUE_TO_NAME, VALUE_TO_NAMES }`
+keyed by the *short* name — the enumerator's C name (e.g. `LIBRAW_WARN_FALLBACK_TO_AHD`) with the enum's
+common `LIBRAW_..._` prefix stripped (`FALLBACK_TO_AHD`).
+
+Two convenience functions built on the CAPS/WARN tables:
+
+- `capabilityNames()` — the short names of `capabilities()`'s set bits, e.g. `['ZLIB', 'JPEG']`.
+- `warningNames(mask)` — the short names of a `LIBRAW_WARN_*` bitmask's set bits, e.g.
+  `warningNames(1 << 15) === ['FALLBACK_TO_AHD']`.
+
+`decode()`/`identify()` results carry `warnings: string[]` using these same short names (so
+`LIBRAW_WARN_FALLBACK_TO_AHD` reports as `'FALLBACK_TO_AHD'`, not the full `LIBRAW_*` name).
+
 ## Testing
 
 `npm test` runs the vitest suite (`test/`) against the committed synthetic PM5544 DNG fixture

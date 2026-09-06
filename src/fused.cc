@@ -1,6 +1,7 @@
 #include "fused.h"
 
 #include "cancel.h"
+#include "enums.h"
 #include "errors.h"
 #include "events.h"
 #include "image_format.h"
@@ -34,47 +35,12 @@ namespace {
 
 // --- shared helpers --------------------------------------------------------
 
-// LIBRAW_WARN_* -> name, hand-written for now (docs/reference/
-// libraw-raw-params-thumbnails-flags.md's "Warnings" table); T13 generates
-// this from libraw_const.h the same way scripts/gen-errors.js generates the
-// error table (src/errors.cc).
-Napi::Array WarningsToArray(Napi::Env env, unsigned int warnings) {
-  static const std::pair<unsigned int, const char*> kWarnings[] = {
-      {LIBRAW_WARN_BAD_CAMERA_WB, "LIBRAW_WARN_BAD_CAMERA_WB"},
-      {LIBRAW_WARN_NO_METADATA, "LIBRAW_WARN_NO_METADATA"},
-      {LIBRAW_WARN_NO_JPEGLIB, "LIBRAW_WARN_NO_JPEGLIB"},
-      {LIBRAW_WARN_NO_EMBEDDED_PROFILE, "LIBRAW_WARN_NO_EMBEDDED_PROFILE"},
-      {LIBRAW_WARN_NO_INPUT_PROFILE, "LIBRAW_WARN_NO_INPUT_PROFILE"},
-      {LIBRAW_WARN_BAD_OUTPUT_PROFILE, "LIBRAW_WARN_BAD_OUTPUT_PROFILE"},
-      {LIBRAW_WARN_NO_BADPIXELMAP, "LIBRAW_WARN_NO_BADPIXELMAP"},
-      {LIBRAW_WARN_BAD_DARKFRAME_FILE, "LIBRAW_WARN_BAD_DARKFRAME_FILE"},
-      {LIBRAW_WARN_BAD_DARKFRAME_DIM, "LIBRAW_WARN_BAD_DARKFRAME_DIM"},
-      {LIBRAW_WARN_RAWSPEED_PROBLEM, "LIBRAW_WARN_RAWSPEED_PROBLEM"},
-      {LIBRAW_WARN_RAWSPEED_UNSUPPORTED, "LIBRAW_WARN_RAWSPEED_UNSUPPORTED"},
-      {LIBRAW_WARN_RAWSPEED_PROCESSED, "LIBRAW_WARN_RAWSPEED_PROCESSED"},
-      {LIBRAW_WARN_FALLBACK_TO_AHD, "LIBRAW_WARN_FALLBACK_TO_AHD"},
-      {LIBRAW_WARN_PARSEFUJI_PROCESSED, "LIBRAW_WARN_PARSEFUJI_PROCESSED"},
-      {LIBRAW_WARN_DNGSDK_PROCESSED, "LIBRAW_WARN_DNGSDK_PROCESSED"},
-      {LIBRAW_WARN_DNG_IMAGES_REORDERED, "LIBRAW_WARN_DNG_IMAGES_REORDERED"},
-      {LIBRAW_WARN_DNG_STAGE2_APPLIED, "LIBRAW_WARN_DNG_STAGE2_APPLIED"},
-      {LIBRAW_WARN_DNG_STAGE3_APPLIED, "LIBRAW_WARN_DNG_STAGE3_APPLIED"},
-      {LIBRAW_WARN_RAWSPEED3_PROBLEM, "LIBRAW_WARN_RAWSPEED3_PROBLEM"},
-      {LIBRAW_WARN_RAWSPEED3_UNSUPPORTED, "LIBRAW_WARN_RAWSPEED3_UNSUPPORTED"},
-      {LIBRAW_WARN_RAWSPEED3_PROCESSED, "LIBRAW_WARN_RAWSPEED3_PROCESSED"},
-      {LIBRAW_WARN_RAWSPEED3_NOTLISTED, "LIBRAW_WARN_RAWSPEED3_NOTLISTED"},
-      {LIBRAW_WARN_VENDOR_CROP_SUGGESTED, "LIBRAW_WARN_VENDOR_CROP_SUGGESTED"},
-      {LIBRAW_WARN_DNG_NOT_PROCESSED, "LIBRAW_WARN_DNG_NOT_PROCESSED"},
-      {LIBRAW_WARN_DNG_NOT_PARSED, "LIBRAW_WARN_DNG_NOT_PARSED"},
-  };
-  Napi::Array arr = Napi::Array::New(env);
-  uint32_t idx = 0;
-  for (const auto& entry : kWarnings) {
-    if (warnings & entry.first) {
-      arr.Set(idx++, Napi::String::New(env, entry.second));
-    }
-  }
-  return arr;
-}
+// T13: `warnings` result fields use libraw_node::WarningsToArray
+// (src/enums.h/.cc, generated from libraw_const.h by scripts/gen-enums.js)
+// instead of the hand-written LIBRAW_WARN_*->name table this file used to
+// carry directly (T08) -- same rationale as src/errors.cc's generated error
+// table. Note the short-name change: results now carry "FALLBACK_TO_AHD",
+// not the old "LIBRAW_WARN_FALLBACK_TO_AHD".
 
 // T09: RejectIfAborted (the pre-abort fast path) moved to src/errors.h/.cc
 // so src/processor.cc can share it verbatim.
