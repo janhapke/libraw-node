@@ -21,7 +21,8 @@
     "gen:errors": "node scripts/gen-errors.js",
     "gen:progress": "node scripts/gen-progress.js",
     "gen:manifest": "node scripts/gen-manifest.js",
-    "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-manifest.js --check",
+    "gen:params-cc": "node scripts/gen-params-cc.js",
+    "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-manifest.js --check && node scripts/gen-params-cc.js --check",
     "test": "vitest run --reporter=verbose"
   },
   "dependencies": {

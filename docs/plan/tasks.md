@@ -346,6 +346,23 @@ Acceptance:
 - Test: `setParams({ halfSize: true })` throws `TypeError` mentioning `halfSize`; `gamm` with 5 elements
   throws; `user_qual: 7` throws (not in enum).
 
+> **Correction (T12):** the generated file actually landed at `src/generated/params.gen.cc` (matching this
+> repo's other generators, e.g. `src/generated/libraw_errors.inc` from `scripts/gen-errors.js`), not
+> `src/params.gen.cc` -- alongside a small hand-written `src/params.h` declaring `ApplyParams`/
+> `ApplyRawParams`/`ParamsToObject`/`RawParamsToObject` and the `ParamStrings` struct (the "`Processor`-owned
+> storage" this bullet mentions, generalized: it is owned by whichever caller applies params -- `Processor`
+> as a member, or the fused `decode()` worker via a `shared_ptr`, since `decode()` has no `Processor`).
+> `applyParams`/`applyRawParams` are not one generic function dispatching through a runtime `{name, kind,
+> offset/setter lambda, validator}` table as sketched above -- `scripts/gen-params-cc.js` instead emits one
+> straight-line validate-then-assign C++ block per manifest field (table-driven at *generation* time, from
+> `api/params.json`, rather than at run time); this avoids needing a `libraw_output_params_t` member-pointer/
+> offset abstraction that would have to handle scalars, fixed arrays, `char*` pointers, and fixed `char[N]`
+> buffers uniformly. `Processor` gained four methods (`setParams`/`setRawParams`/`getParams`/`getRawParams`),
+> not two module-level functions, and the fused `decode()`/`identify()` helpers call `ApplyParams`/
+> `ApplyRawParams` directly rather than through `Processor`. See `docs/reference/proposed-binding-api.md`'s
+> T12 correction for the state-machine rule (`setRawParams` before `open*`, `setParams` before `process`)
+> this bullet's "type checks, array-length checks, enum/range checks" line does not otherwise mention.
+
 ### T13 — Flag and enum tables
 
 Read: `docs/reference/libraw-raw-params-thumbnails-flags.md`.

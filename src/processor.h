@@ -58,6 +58,7 @@
 #include <vector>
 
 #include "events.h"
+#include "params.h"
 
 namespace libraw_node {
 
@@ -112,6 +113,22 @@ class Processor : public Napi::ObjectWrap<Processor> {
   Napi::Value SrawMidpoint(const Napi::CallbackInfo& info);
   Napi::Value Color(const Napi::CallbackInfo& info);
   Napi::Value ThumbOK(const Napi::CallbackInfo& info);
+
+  // T12: generated parameter application (src/params.h,
+  // src/generated/params.gen.cc). setRawParams/setParams are synchronous
+  // (validation is cheap and never touches LibRaw's decode path) and gated
+  // by the state machine -- see src/params.h's header comment and the
+  // implementations in src/processor.cc for exactly which flag each one
+  // checks and why:
+  //   setRawParams(obj) -- throws LIBRAW_OUT_OF_ORDER_CALL once opened_.
+  //   setParams(obj)    -- throws LIBRAW_OUT_OF_ORDER_CALL once processed_.
+  // getParams()/getRawParams() have no state restriction beyond "not
+  // closed" -- imgdata.params/imgdata.rawparams are valid to read in every
+  // other state, including right after construction.
+  Napi::Value SetParams(const Napi::CallbackInfo& info);
+  Napi::Value SetRawParams(const Napi::CallbackInfo& info);
+  Napi::Value GetParams(const Napi::CallbackInfo& info);
+  Napi::Value GetRawParams(const Napi::CallbackInfo& info);
 
   // T10: not exposed as public API (no wrapper in lib/processor.cjs's
   // METHODS/ASYNC_METHODS lists) -- called internally, as `_drainEvents()`,
@@ -179,6 +196,15 @@ class Processor : public Napi::ObjectWrap<Processor> {
   // to the async path only, matching T09's cancellation support, since only
   // async jobs get a JobCancelState/progress-callback installation at all).
   std::vector<JobEvent> pendingEvents_;
+
+  // T12: backing storage for imgdata.params' char* fields (output_profile,
+  // camera_profile, bad_pixels, dark_frame) -- see src/params.h's
+  // ParamStrings comment for why this has to outlive every dcraw_process()
+  // call made through raw_. Lives for the whole Processor lifetime (not
+  // reset by recycle()/ResetState(): LibRaw's own recycle() already resets
+  // imgdata.params.{output_profile,...} to nullptr, so stale strings here
+  // are simply unreferenced, not dangling).
+  ParamStrings paramStrings_;
 };
 
 }  // namespace libraw_node

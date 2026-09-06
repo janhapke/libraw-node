@@ -72,3 +72,30 @@ adapt the plugins.
 When bumping LibRaw, run a script that parses `libraw_types.h` for the two param structs and diffs against
 the manifest; CI fails on new or removed fields until the manifest is updated. This is what lightdrift's
 "parity manifest" idea is for; doing it from the header is cheaper than maintaining it by hand.
+
+> **Correction (T11/T12):** the manifest actually committed is `api/params.json` (T11,
+> `scripts/gen-manifest.js`), keyed by `structs.params`/`structs.rawparams` (not a bare `params`/
+> `rawparams` top level as sketched in §1 above), with header-derived facts (`cType`, `cArrayLength`) kept
+> separate from the hand-maintained `api/params.annotations.json` (`doc`, `type`, `default`, `enum`/
+> `flags`, `min`/`max`, `notes`) so the two can never drift silently -- `gen-manifest.js --check` fails if
+> either side is missing a field the other has.
+>
+> `src/params.gen.cc` (§1, item 1) is actually `src/generated/params.gen.cc` (T12,
+> `scripts/gen-params-cc.js`), and it is not one generic `applyParams(Napi::Object, libraw_output_params_t&)`
+> dispatching through a runtime `{name, kind, offset/setter lambda, validator}` table -- it emits one
+> straight-line validate-then-assign block per manifest field instead (still entirely table-driven, just at
+> *generation* time: the JS generator walks `api/params.json`'s field table and emits C++ per field, rather
+> than the C++ walking a table at *run* time). The four functions it implements
+> (`ApplyParams`/`ApplyRawParams`/`ParamsToObject`/`RawParamsToObject`) are declared by a small hand-written
+> `src/params.h`, which also declares `ParamStrings` -- the addon-owned `std::string` storage `output_profile`/
+> `camera_profile`/`bad_pixels`/`dark_frame` need per §2's "Assignment rules" bullet, kept alive by
+> `Processor` (as a member) or by the fused `decode()` worker (via a `shared_ptr`), not literally "on the
+> `Processor`" in the sense of instance-only.
+>
+> §1's "flag enums ... get the same treatment" is not yet built as a separate `api/enums.json` manifest --
+> that is T13. T12 only implements the `flags`-typed *fields* of `api/params.json` (a plain number, or an
+> array of `LIBRAW_*` flag-name strings taken straight from that field's own `flags` map in the manifest --
+> not from a shared enum table), which is enough for `rawparams.options`'s `LIBRAW_RAWOPTIONS_*` names (§2)
+> and every other `flags`-typed field, but not for a package-wide `warnings: string[]` derived from
+> `process_warnings` (still hand-written in `src/fused.cc`, per T08's own note there) or for exporting the
+> flag/enum tables standalone.

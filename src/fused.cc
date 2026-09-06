@@ -4,6 +4,7 @@
 #include "errors.h"
 #include "events.h"
 #include "image_format.h"
+#include "params.h"
 
 #include <libraw/libraw.h>
 
@@ -75,22 +76,6 @@ Napi::Array WarningsToArray(Napi::Env env, unsigned int warnings) {
   return arr;
 }
 
-void ValidateKeys(Napi::Env env, Napi::Object obj, const std::vector<std::string>& allowed,
-                   const std::string& label) {
-  Napi::Array keys = obj.GetPropertyNames();
-  for (uint32_t i = 0; i < keys.Length(); i++) {
-    std::string key = keys.Get(i).As<Napi::String>().Utf8Value();
-    if (std::find(allowed.begin(), allowed.end(), key) == allowed.end()) {
-      std::string list;
-      for (size_t j = 0; j < allowed.size(); j++) {
-        if (j > 0) list += ", ";
-        list += allowed[j];
-      }
-      throw Napi::TypeError::New(env, label + ": unknown key '" + key + "'; supported keys are: " + list);
-    }
-  }
-}
-
 // T09: RejectIfAborted (the pre-abort fast path) moved to src/errors.h/.cc
 // so src/processor.cc can share it verbatim.
 
@@ -128,71 +113,28 @@ Napi::Buffer<uint8_t> RequireBufferArg(Napi::Env env, const Napi::CallbackInfo& 
 
 // --- decode() ----------------------------------------------------------
 
-// Plain-old-data: the hand-written subset of libraw_output_params_t /
-// libraw_raw_unpack_params_t this task applies (T12/T13 replace this with
-// the generated table). No Napi::* members here on purpose -- this struct
-// is read from Execute() (threadpool thread), and a Napi::Value read from
-// the wrong thread (or after the call that produced it returned) is
-// undefined behaviour.
-struct DecodeOptions {
-  bool has_half_size = false;
-  bool half_size = false;
-  bool has_user_qual = false;
-  int user_qual = 0;
-  bool has_use_camera_wb = false;
-  bool use_camera_wb = false;
-  bool has_output_bps = false;
-  int output_bps = 0;
-  bool has_shot_select = false;
-  unsigned int shot_select = 0;
+// T12: params/rawparams are applied directly onto `raw->imgdata` on the JS
+// thread, before the worker is constructed (see Decode(), below) -- ApplyParams/
+// ApplyRawParams (src/params.h/src/generated/params.gen.cc) do all the
+// unknown-key/type/range/enum/flags validation there, where throwing a
+// Napi::TypeError/RangeError is cheap and synchronous. Only the output-shape
+// options (`output.layout`/`stride`/`into`) are still parsed into a
+// plain-old-data struct for the worker: those don't touch imgdata, only how
+// this call's own output Buffer is filled. No Napi::* members in this struct
+// on purpose -- it is read from Execute() (threadpool thread), and a
+// Napi::Value read from the wrong thread (or after the call that produced it
+// returned) is undefined behaviour.
+struct DecodeOutputOptions {
   bool bgr = false;  // output.layout === 'bgr'
   int stride = 0;    // output.stride override; 0 = default (width*colors*bps/8)
 };
 
-// Parses `opts` on the JS thread. `intoRefOut` receives a persistent
+// Parses `opts.output` on the JS thread. `intoRefOut` receives a persistent
 // reference to `output.into` immediately (if given) so no Napi::Value needs
-// to be kept alive inside DecodeOptions itself.
-DecodeOptions ParseDecodeOptions(Napi::Env env, Napi::Object opts,
-                                  Napi::Reference<Napi::Buffer<uint8_t>>& intoRefOut) {
-  DecodeOptions result;
-
-  if (opts.Has("params") && !opts.Get("params").IsUndefined()) {
-    Napi::Value pv = opts.Get("params");
-    if (!pv.IsObject()) {
-      throw Napi::TypeError::New(env, "decode({ params }): params must be an object");
-    }
-    Napi::Object p = pv.As<Napi::Object>();
-    ValidateKeys(env, p, {"half_size", "user_qual", "use_camera_wb", "output_bps"}, "decode({ params })");
-    if (p.Has("half_size") && !p.Get("half_size").IsUndefined()) {
-      result.has_half_size = true;
-      result.half_size = p.Get("half_size").ToBoolean();
-    }
-    if (p.Has("user_qual") && !p.Get("user_qual").IsUndefined()) {
-      result.has_user_qual = true;
-      result.user_qual = p.Get("user_qual").ToNumber().Int32Value();
-    }
-    if (p.Has("use_camera_wb") && !p.Get("use_camera_wb").IsUndefined()) {
-      result.has_use_camera_wb = true;
-      result.use_camera_wb = p.Get("use_camera_wb").ToBoolean();
-    }
-    if (p.Has("output_bps") && !p.Get("output_bps").IsUndefined()) {
-      result.has_output_bps = true;
-      result.output_bps = p.Get("output_bps").ToNumber().Int32Value();
-    }
-  }
-
-  if (opts.Has("rawparams") && !opts.Get("rawparams").IsUndefined()) {
-    Napi::Value rv = opts.Get("rawparams");
-    if (!rv.IsObject()) {
-      throw Napi::TypeError::New(env, "decode({ rawparams }): rawparams must be an object");
-    }
-    Napi::Object r = rv.As<Napi::Object>();
-    ValidateKeys(env, r, {"shot_select"}, "decode({ rawparams })");
-    if (r.Has("shot_select") && !r.Get("shot_select").IsUndefined()) {
-      result.has_shot_select = true;
-      result.shot_select = r.Get("shot_select").ToNumber().Uint32Value();
-    }
-  }
+// to be kept alive inside DecodeOutputOptions itself.
+DecodeOutputOptions ParseDecodeOutputOptions(Napi::Env env, Napi::Object opts,
+                                              Napi::Reference<Napi::Buffer<uint8_t>>& intoRefOut) {
+  DecodeOutputOptions result;
 
   if (opts.Has("output") && !opts.Get("output").IsUndefined()) {
     Napi::Value ov = opts.Get("output");
@@ -225,9 +167,10 @@ DecodeOptions ParseDecodeOptions(Napi::Env env, Napi::Object opts,
 
 class DecodeWorker : public Napi::AsyncWorker {
  public:
-  DecodeWorker(Napi::Env env, Napi::Buffer<uint8_t> input, DecodeOptions opts,
+  DecodeWorker(Napi::Env env, Napi::Buffer<uint8_t> input, DecodeOutputOptions opts,
                Napi::Reference<Napi::Buffer<uint8_t>>&& intoRef, Napi::Promise::Deferred deferred,
-               std::shared_ptr<JobCancelState> cancelState, std::shared_ptr<LibRaw> raw)
+               std::shared_ptr<JobCancelState> cancelState, std::shared_ptr<LibRaw> raw,
+               std::shared_ptr<ParamStrings> paramStrings)
       : Napi::AsyncWorker(env),
         bufRef_(Napi::Persistent(input)),
         data_(input.Data()),
@@ -236,11 +179,15 @@ class DecodeWorker : public Napi::AsyncWorker {
         intoRef_(std::move(intoRef)),
         deferred_(deferred),
         cancelState_(std::move(cancelState)),
-        raw_(std::move(raw)) {}
+        raw_(std::move(raw)),
+        paramStrings_(std::move(paramStrings)) {}
 
  protected:
-  // Threadpool thread: open -> apply params -> unpack -> process. No
-  // Napi::* calls here (see this file's header comment).
+  // Threadpool thread: open -> unpack -> process (params/rawparams were
+  // already applied onto raw_->imgdata on the JS thread, before this worker
+  // was constructed -- see this file's header comment above
+  // DecodeOutputOptions). No Napi::* calls here (see this file's top-of-file
+  // header comment on the three-phase worker shape).
   void Execute() override {
     // T09: cancelled between Queue() (JS thread) and this method actually
     // starting -- bail without touching raw_ any further than the progress
@@ -252,16 +199,8 @@ class DecodeWorker : public Napi::AsyncWorker {
     }
     raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
     raw_->set_dataerror_handler(&RecordDataErrorEvent, cancelState_.get());
-    if (opts_.has_shot_select) {
-      raw_->imgdata.rawparams.shot_select = opts_.shot_select;
-    }
     rc_ = raw_->open_buffer(data_, length_);
     if (rc_ != LIBRAW_SUCCESS) return;
-
-    if (opts_.has_half_size) raw_->imgdata.params.half_size = opts_.half_size ? 1 : 0;
-    if (opts_.has_use_camera_wb) raw_->imgdata.params.use_camera_wb = opts_.use_camera_wb ? 1 : 0;
-    if (opts_.has_user_qual) raw_->imgdata.params.user_qual = opts_.user_qual;
-    if (opts_.has_output_bps) raw_->imgdata.params.output_bps = opts_.output_bps;
 
     rc_ = raw_->unpack();
     if (rc_ != LIBRAW_SUCCESS) return;
@@ -350,7 +289,7 @@ class DecodeWorker : public Napi::AsyncWorker {
   Napi::Reference<Napi::Buffer<uint8_t>> bufRef_;
   uint8_t* data_;
   size_t length_;
-  DecodeOptions opts_;
+  DecodeOutputOptions opts_;
   Napi::Reference<Napi::Buffer<uint8_t>> intoRef_;
   Napi::Promise::Deferred deferred_;
   std::shared_ptr<JobCancelState> cancelState_;
@@ -360,6 +299,12 @@ class DecodeWorker : public Napi::AsyncWorker {
   // closure can hold its own shared_ptr copy -- see src/cancel.h's
   // MakeLibRawCancelFunction comment for why that matters.
   std::shared_ptr<LibRaw> raw_;
+  // T12: keeps ApplyParams' char*-pointer-field backing storage
+  // (output_profile/camera_profile/bad_pixels/dark_frame) alive through
+  // Execute()'s dcraw_process() call -- see src/params.h's ParamStrings
+  // comment. Applied to before this worker was constructed (Decode(),
+  // below); never read here directly, only kept alive.
+  std::shared_ptr<ParamStrings> paramStrings_;
   int rc_ = LIBRAW_SUCCESS;
   int width_ = 0, height_ = 0, colors_ = 0, bps_ = 0, flip_ = 0;
   unsigned int warnings_ = 0;
@@ -367,41 +312,14 @@ class DecodeWorker : public Napi::AsyncWorker {
 
 // --- identify() ----------------------------------------------------------
 
-struct IdentifyOptions {
-  unsigned int options = 0;
-  bool has_shot_select = false;
-  unsigned int shot_select = 0;
-};
-
-IdentifyOptions ParseIdentifyOptions(Napi::Env env, Napi::Object opts) {
-  IdentifyOptions result;
-  if (opts.Has("rawparams") && !opts.Get("rawparams").IsUndefined()) {
-    Napi::Value rv = opts.Get("rawparams");
-    if (!rv.IsObject()) {
-      throw Napi::TypeError::New(env, "identify({ rawparams }): rawparams must be an object");
-    }
-    Napi::Object r = rv.As<Napi::Object>();
-    ValidateKeys(env, r, {"options", "shot_select"}, "identify({ rawparams })");
-    if (r.Has("options") && !r.Get("options").IsUndefined()) {
-      result.options = r.Get("options").ToNumber().Uint32Value();
-    }
-    if (r.Has("shot_select") && !r.Get("shot_select").IsUndefined()) {
-      result.has_shot_select = true;
-      result.shot_select = r.Get("shot_select").ToNumber().Uint32Value();
-    }
-  }
-  return result;
-}
-
 class IdentifyWorker : public Napi::AsyncWorker {
  public:
-  IdentifyWorker(Napi::Env env, Napi::Buffer<uint8_t> input, IdentifyOptions opts, Napi::Promise::Deferred deferred,
+  IdentifyWorker(Napi::Env env, Napi::Buffer<uint8_t> input, Napi::Promise::Deferred deferred,
                   std::shared_ptr<JobCancelState> cancelState, std::shared_ptr<LibRaw> raw)
       : Napi::AsyncWorker(env),
         bufRef_(Napi::Persistent(input)),
         data_(input.Data()),
         length_(input.Length()),
-        opts_(opts),
         deferred_(deferred),
         cancelState_(std::move(cancelState)),
         raw_(std::move(raw)) {}
@@ -421,15 +339,15 @@ class IdentifyWorker : public Napi::AsyncWorker {
     }
     raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
     raw_->set_dataerror_handler(&RecordDataErrorEvent, cancelState_.get());
-    // "OR it into the existing default" (docs/plan/tasks.md T08): the
-    // caller's own rawparams.options (0 if not given) plus
-    // CHECK_THUMBNAILS_KNOWN_VENDORS, which fixes 0-sized/unknown thumbs_list
-    // entries for known vendors (see docs/reference/
-    // libraw-raw-params-thumbnails-flags.md's "Thumbnails" section).
-    raw_->imgdata.rawparams.options = opts_.options | LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_KNOWN_VENDORS;
-    if (opts_.has_shot_select) {
-      raw_->imgdata.rawparams.shot_select = opts_.shot_select;
-    }
+    // T12: the caller's own rawparams (applied via ApplyRawParams in
+    // Identify(), below, before this worker was constructed -- defaults to
+    // all-zero/default-initialized if no rawparams option was given) OR'd
+    // with CHECK_THUMBNAILS_KNOWN_VENDORS, which fixes 0-sized/unknown
+    // thumbs_list entries for known vendors (see docs/reference/
+    // libraw-raw-params-thumbnails-flags.md's "Thumbnails" section). Plain
+    // bitwise-OR on an already-applied struct member, safe to do here on the
+    // threadpool thread (no Napi::* calls).
+    raw_->imgdata.rawparams.options |= LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_KNOWN_VENDORS;
     rc_ = raw_->open_buffer(data_, length_);
     if (rc_ != LIBRAW_SUCCESS) return;
     rc_ = raw_->adjust_sizes_info_only();
@@ -518,7 +436,6 @@ class IdentifyWorker : public Napi::AsyncWorker {
   Napi::Reference<Napi::Buffer<uint8_t>> bufRef_;
   uint8_t* data_;
   size_t length_;
-  IdentifyOptions opts_;
   Napi::Promise::Deferred deferred_;
   std::shared_ptr<JobCancelState> cancelState_;
   std::shared_ptr<LibRaw> raw_;
@@ -678,11 +595,34 @@ Napi::Value Decode(const Napi::CallbackInfo& info) {
       return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
     }
 
-    Napi::Reference<Napi::Buffer<uint8_t>> intoRef;  // stays empty unless output.into is given
-    DecodeOptions parsed = ParseDecodeOptions(env, opts, intoRef);
-    auto cancelState = std::make_shared<JobCancelState>();
+    // T12: raw + strings are constructed here, on the JS thread, so
+    // params/rawparams can be validated and applied synchronously (throwing
+    // a Napi::TypeError/RangeError right here, before any worker exists, on
+    // an invalid options object) -- see this file's header comment above
+    // DecodeOutputOptions. rawparams first: it affects open_buffer()/
+    // unpack(), which run before dcraw_process() reads params.
     auto raw = std::make_shared<LibRaw>();
-    (new DecodeWorker(env, input, parsed, std::move(intoRef), deferred, cancelState, raw))->Queue();
+    auto paramStrings = std::make_shared<ParamStrings>();
+
+    if (opts.Has("rawparams") && !opts.Get("rawparams").IsUndefined()) {
+      Napi::Value rv = opts.Get("rawparams");
+      if (!rv.IsObject()) {
+        throw Napi::TypeError::New(env, "decode({ rawparams }): rawparams must be an object");
+      }
+      ApplyRawParams(env, rv.As<Napi::Object>(), raw->imgdata.rawparams);
+    }
+    if (opts.Has("params") && !opts.Get("params").IsUndefined()) {
+      Napi::Value pv = opts.Get("params");
+      if (!pv.IsObject()) {
+        throw Napi::TypeError::New(env, "decode({ params }): params must be an object");
+      }
+      ApplyParams(env, pv.As<Napi::Object>(), raw->imgdata.params, *paramStrings);
+    }
+
+    Napi::Reference<Napi::Buffer<uint8_t>> intoRef;  // stays empty unless output.into is given
+    DecodeOutputOptions parsed = ParseDecodeOutputOptions(env, opts, intoRef);
+    auto cancelState = std::make_shared<JobCancelState>();
+    (new DecodeWorker(env, input, parsed, std::move(intoRef), deferred, cancelState, raw, paramStrings))->Queue();
     return WrapPromiseWithCancel(env, deferred.Promise(), MakeLibRawCancelFunction(env, cancelState, raw));
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
@@ -701,10 +641,18 @@ Napi::Value Identify(const Napi::CallbackInfo& info) {
       return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
     }
 
-    IdentifyOptions parsed = ParseIdentifyOptions(env, opts);
-    auto cancelState = std::make_shared<JobCancelState>();
+    // T12: rawparams applied on the JS thread, same rationale as Decode()
+    // above (no "params" for identify() -- it never calls dcraw_process()).
     auto raw = std::make_shared<LibRaw>();
-    (new IdentifyWorker(env, input, parsed, deferred, cancelState, raw))->Queue();
+    if (opts.Has("rawparams") && !opts.Get("rawparams").IsUndefined()) {
+      Napi::Value rv = opts.Get("rawparams");
+      if (!rv.IsObject()) {
+        throw Napi::TypeError::New(env, "identify({ rawparams }): rawparams must be an object");
+      }
+      ApplyRawParams(env, rv.As<Napi::Object>(), raw->imgdata.rawparams);
+    }
+    auto cancelState = std::make_shared<JobCancelState>();
+    (new IdentifyWorker(env, input, deferred, cancelState, raw))->Queue();
     return WrapPromiseWithCancel(env, deferred.Promise(), MakeLibRawCancelFunction(env, cancelState, raw));
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());

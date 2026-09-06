@@ -84,3 +84,30 @@ Rules:
 > `close()`, or a fresh `open()`/`openBuffer()`/`openFile()` call** (those three are the only calls exempt
 > -- `recycle()`/`close()` clear the condition, and `open*` resets the object's state anyway). This applies
 > even to retrying the *same* stage that was cancelled, not just to advancing further.
+
+> **Correction (T12):** `raw.params = { ...partial }` in the sketch above is not how parameter assignment
+> actually works -- there is no plain-property setter. `Processor` instead gets four methods, generated
+> from `api/params.json` (`src/params.h`, `src/generated/params.gen.cc`, `scripts/gen-params-cc.js`):
+> `setParams(partial)` / `getParams()` for `imgdata.params` (`libraw_output_params_t`) and
+> `setRawParams(partial)` / `getRawParams()` for `imgdata.rawparams` (`libraw_raw_unpack_params_t`). Both
+> setters validate every key against the manifest (unknown key -> `TypeError` naming it and listing the
+> supported keys; wrong JS type -> `TypeError`; wrong array length, an enum value outside its allowed set,
+> a number outside its `min`/`max`, or an unknown `flags` name -> `RangeError`; a field annotated
+> `unsupported` in `api/params.json`, currently only `rawparams.custom_camera_strings` -> `TypeError`). A
+> `flags`-typed field (e.g. `rawparams.options`) accepts either a plain number or an array of
+> `LIBRAW_*` flag-name strings, OR'd together. The getters return every manifest field of the struct with
+> its current value (bools as booleans, enums/flags as numbers, arrays as arrays, strings as strings or
+> `null`).
+>
+> State rule, enforced by the same `LIBRAW_OUT_OF_ORDER_CALL` state machine as the rest of `Processor`:
+> **`setRawParams` is only allowed before the Processor has been opened** (rawparams affects raw parsing
+> LibRaw does at `open_buffer()`/`open_file()`/`unpack()` time; a change after `opened_` would be silently
+> ignored by LibRaw), and **`setParams` is only allowed before `process()`/`processSync()` has run** (params
+> are only read by `dcraw_process()`; T12 does not support re-running `process()` with updated params). Both
+> reset to "allowed again" after `recycle()`, `close()`, or a fresh `open*()` call, matching the cancellation
+> rule above. `getParams()`/`getRawParams()` have no such restriction -- they read `imgdata.params`/
+> `imgdata.rawparams`, which are valid (zero-/default-initialised) in every state short of `close()`d.
+>
+> The fused `decode(buffer, { params?, rawparams? })` and `identify(buffer, { rawparams? })` helpers apply
+> `params`/`rawparams` the same validated way, on the JS thread, before their worker starts -- `rawparams`
+> first, then `params`, matching the ordering rule above.

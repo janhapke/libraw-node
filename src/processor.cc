@@ -84,6 +84,12 @@ Napi::Function Processor::DefineClass(Napi::Env env) {
           InstanceMethod("srawMidpoint", &Processor::SrawMidpoint),
           InstanceMethod("color", &Processor::Color),
           InstanceMethod("thumbOK", &Processor::ThumbOK),
+          // T12: generated parameter application -- see processor.h's
+          // comment above these four declarations.
+          InstanceMethod("setParams", &Processor::SetParams),
+          InstanceMethod("setRawParams", &Processor::SetRawParams),
+          InstanceMethod("getParams", &Processor::GetParams),
+          InstanceMethod("getRawParams", &Processor::GetRawParams),
           // T10: internal-only, see processor.h's DrainEvents comment.
           InstanceMethod("_drainEvents", &Processor::DrainEvents),
       });
@@ -701,6 +707,80 @@ Napi::Value Processor::ThumbOK(const Napi::CallbackInfo& info) {
     maxsz = static_cast<INT64>(info[0].As<Napi::Number>().Int64Value());
   }
   return Napi::Number::New(env, raw_->thumbOK(maxsz));
+}
+
+// --- T12: parameter application ---------------------------------------------
+
+// setParams(obj) -> undefined. Applies `obj` onto imgdata.params via the
+// generated ApplyParams (src/params.h/src/generated/params.gen.cc) --
+// unknown keys, wrong types, wrong array lengths, out-of-enum/out-of-range
+// values all throw (TypeError or RangeError) without mutating raw_ at all
+// (ApplyParams validates every field before assigning any of them... see
+// src/generated/params.gen.cc: each field's own `if` block validates then
+// assigns immediately, so a failure partway through can leave earlier fields
+// in this same call already applied -- matching how the rest of this file's
+// argument validation works, e.g. imageSync's into-buffer size check, and
+// acceptable here since a throw means the caller's whole options object was
+// rejected and it is expected to inspect/fix and retry, not rely on
+// partial-application semantics).
+//
+// State rule (src/params.h's header comment): allowed any time up to
+// dcraw_process() -- once processed_ is true, LibRaw has already consumed
+// the params it read for that call, so further changes would be silently
+// ignored until process() ran again, which T12 does not support re-running
+// with new params. Throws LIBRAW_OUT_OF_ORDER_CALL in that case.
+Napi::Value Processor::SetParams(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  RequireNotClosed(env, "setParams");
+  if (processed_) {
+    ThrowProcessorError(env, LIBRAW_OUT_OF_ORDER_CALL, "setParams");
+  }
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    throw Napi::TypeError::New(env, "setParams(params): params must be an object");
+  }
+  ApplyParams(env, info[0].As<Napi::Object>(), raw_->imgdata.params, paramStrings_);
+  return env.Undefined();
+}
+
+// setRawParams(obj) -> undefined. Same shape as setParams, for
+// imgdata.rawparams (ApplyRawParams).
+//
+// State rule: allowed only before the Processor has been opened -- rawparams
+// affects raw parsing LibRaw does at open_buffer()/open_file() time (e.g.
+// imgdata.rawparams.options' thumbnail/DNG-stage bits) or at unpack() time
+// (shot_select); once opened_ is true those reads have already happened (or,
+// for shot_select, are about to happen at the very next unpack() using
+// whatever was set before open), so a change here would be silently ignored
+// by LibRaw. Throws LIBRAW_OUT_OF_ORDER_CALL once opened_.
+Napi::Value Processor::SetRawParams(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  RequireNotClosed(env, "setRawParams");
+  if (opened_) {
+    ThrowProcessorError(env, LIBRAW_OUT_OF_ORDER_CALL, "setRawParams");
+  }
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    throw Napi::TypeError::New(env, "setRawParams(rawparams): rawparams must be an object");
+  }
+  ApplyRawParams(env, info[0].As<Napi::Object>(), raw_->imgdata.rawparams);
+  return env.Undefined();
+}
+
+// getParams()/getRawParams() -> object. Returns every api/params.json field
+// of the corresponding struct with its current value (ParamsToObject/
+// RawParamsToObject, src/generated/params.gen.cc) -- readable in any state
+// short of closed_, including right after construction (imgdata.params/
+// imgdata.rawparams are zero-/default-initialised by LibRaw's own
+// constructor, not lazily allocated).
+Napi::Value Processor::GetParams(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  RequireNotClosed(env, "getParams");
+  return ParamsToObject(env, raw_->imgdata.params);
+}
+
+Napi::Value Processor::GetRawParams(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  RequireNotClosed(env, "getRawParams");
+  return RawParamsToObject(env, raw_->imgdata.rawparams);
 }
 
 // T10: see processor.h's DrainEvents comment.
