@@ -39,12 +39,18 @@
 #include <string>
 #include <utility>
 
+#include "cancel.h"
 #include "errors.h"
 #include "image_format.h"
 #include "processor.h"
 
 namespace libraw_node {
 
+// T09: see src/cancel.h for the two-mechanism cancellation design and
+// docs/plan/tasks.md's T09. Each ProcessorAsyncWorker gets its own fresh
+// JobCancelState (default-constructed below) -- "clear the flag before each
+// new job" falls out of that for free, since a new worker (and therefore a
+// new JobCancelState) is constructed for every call.
 class ProcessorAsyncWorker : public Napi::AsyncWorker {
  public:
   ProcessorAsyncWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, std::string stage,
@@ -54,6 +60,37 @@ class ProcessorAsyncWorker : public Napi::AsyncWorker {
         stage_(std::move(stage)),
         deferred_(deferred),
         selfRef_(Napi::Persistent(jsThis)) {}
+
+  // Builds this job's `cancel` closure (src/processor.cc calls this after
+  // constructing the worker but before Queue()-ing it, to build the
+  // `{ promise, cancel }` result -- see src/cancel.h's WrapPromiseWithCancel).
+  // Captures `processor_` as a raw pointer -- safe because `active` (checked
+  // first, below) is only true while this worker is still alive, and this
+  // worker holds `selfRef_`, a strong reference to the JS Processor object,
+  // for exactly its own lifetime; the JS thread is single-threaded, so there
+  // is no window where a cancel() call can observe active==true after this
+  // worker (and therefore selfRef_, and therefore the Processor it keeps
+  // alive) has already been destroyed. Unlike the fused workers (src/
+  // fused.cc), Processor's raw_ is not per-job -- it must NOT be wrapped in
+  // its own shared_ptr captured by this closure, or a stray cancel() call
+  // arriving after this job settles could call setCancelFlag() on the *next*
+  // job's still-in-flight LibRaw call (busy_ guarantees jobs on one
+  // Processor never overlap, but cancel() calls against past jobs are only
+  // prevented from mattering by the `active` check below, not by pointer
+  // lifetime).
+  Napi::Function MakeCancel(Napi::Env env) {
+    Processor* processor = processor_;
+    auto state = cancelState_;
+    return Napi::Function::New(
+        env,
+        [processor, state](const Napi::CallbackInfo&) {
+          if (state->active->load()) {
+            state->flag->store(true);
+            processor->raw_->setCancelFlag();
+          }
+        },
+        "cancel");
+  }
 
  protected:
   // Runs entirely off the JS thread (the libuv threadpool). Must not touch
@@ -88,12 +125,61 @@ class ProcessorAsyncWorker : public Napi::AsyncWorker {
   Processor* processor_;
 
  private:
-  void Execute() override { rc_ = Run(*processor_->raw_); }
+  // T09: install the progress callback (checked by dcraw_process()/
+  // identify()-class stages -- see src/cancel.h) before Run() does any real
+  // work, then check whether cancel() already landed between Queue() (JS
+  // thread) and this method starting (threadpool thread) -- if so, skip
+  // Run() entirely rather than starting a doomed pipeline. Real mid-Run()
+  // cancellation for the checkCancel()-polling decoders (mainly relevant to
+  // unpack(), see src/cancel.h) instead relies on cancel() having already
+  // called processor_->raw_->setCancelFlag() directly, from the JS thread,
+  // by the time the running decode loop next polls it -- nothing more is
+  // needed here for that path.
+  void Execute() override {
+    processor_->raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
+    if (cancelState_->flag->load()) {
+      rc_ = LIBRAW_CANCELLED_BY_CALLBACK;
+      return;
+    }
+    rc_ = Run(*processor_->raw_);
+  }
+
+  // Shared OnOK()/OnError() cleanup: stop cancel() (see MakeCancel above)
+  // from doing anything once this job has settled, stop processor_->raw_
+  // from invoking a progress callback that points at a JobCancelState this
+  // worker (and whatever holds the last shared_ptr to it) may go on to
+  // release, and -- per the how-to doc's "clear the flag ... before the
+  // next job" -- clearCancelFlag() unconditionally. This closes a real race:
+  // LibRaw's own `_exitflag` (setCancelFlag()/checkCancel()) is only ever
+  // cleared by checkCancel() consuming it, and not every stage polls
+  // checkCancel() at all (src/cancel.h's class comment); a cancel() call
+  // that lands just as a job is finishing successfully (rc_ ==
+  // LIBRAW_SUCCESS, needsRecycle_ never set) would otherwise leave
+  // `_exitflag` stuck at 1 -- silently cancelling the *next* job on this
+  // Processor the moment it next polls checkCancel(), with no cancel() call
+  // of its own.
+  void SettleCancelState() {
+    cancelState_->active->store(false);
+    processor_->raw_->set_progress_handler(nullptr, nullptr);
+    processor_->raw_->clearCancelFlag();
+  }
 
   void OnOK() override {
     processor_->busy_.store(false);
+    SettleCancelState();
     if (rc_ != LIBRAW_SUCCESS) {
-      deferred_.Reject(MakeProcessorError(Env(), rc_, stage_.c_str()).Value());
+      // T09: a cancelled stage leaves LibRaw's internal state possibly
+      // half-mutated -- processor.h's needsRecycle_ comment explains why the
+      // next stage-advancing call must be refused until recycle()/close()/
+      // a fresh open(). MakeStageError picks the MakeCancelledError shape
+      // (`aborted: true`) for LIBRAW_CANCELLED_BY_CALLBACK, same as the
+      // pre-abort fast path (RejectIfAborted) -- a caller should not have to
+      // distinguish "aborted before we started" from "aborted mid-flight" by
+      // anything other than that flag.
+      if (rc_ == LIBRAW_CANCELLED_BY_CALLBACK) {
+        processor_->needsRecycle_ = true;
+      }
+      deferred_.Reject(MakeStageError(Env(), rc_, stage_.c_str()).Value());
       return;
     }
     deferred_.Resolve(BuildResult(Env()));
@@ -105,6 +191,7 @@ class ProcessorAsyncWorker : public Napi::AsyncWorker {
   // than a path any subclass here is expected to exercise normally.
   void OnError(const Napi::Error&) override {
     processor_->busy_.store(false);
+    SettleCancelState();
     deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, stage_.c_str()).Value());
   }
 
@@ -112,6 +199,7 @@ class ProcessorAsyncWorker : public Napi::AsyncWorker {
   std::string stage_;
   Napi::Promise::Deferred deferred_;
   Napi::ObjectReference selfRef_;
+  std::shared_ptr<JobCancelState> cancelState_ = std::make_shared<JobCancelState>();
 };
 
 // --- openBuffer ---------------------------------------------------------

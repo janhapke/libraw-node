@@ -16,11 +16,18 @@
 
 namespace libraw_node {
 
+// T09: each of these three returns `{ promise, cancel }` (src/cancel.h's
+// WrapPromiseWithCancel), not a bare Promise -- lib/fused.cjs unwraps it and
+// wires `cancel` to `signal` itself, so every JS-visible signature below is
+// still "-> Promise<...>". `signal` is accepted (and checked for a pre-abort
+// fast path plus wired to real cancellation) on all three, not only decode
+// and thumbnail.
+
 // decode(buffer, { params?, rawparams?, output?, signal? }) ->
 // Promise<{ width, height, colors, bits, stride, data, flip, warnings }>.
 Napi::Value Decode(const Napi::CallbackInfo& info);
 
-// identify(buffer, { rawparams? }) ->
+// identify(buffer, { rawparams?, signal? }) ->
 // Promise<{ sizes, idata, thumbs, decoder, warnings, metadata }>.
 Napi::Value Identify(const Napi::CallbackInfo& info);
 

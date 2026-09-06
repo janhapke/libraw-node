@@ -68,27 +68,53 @@ Notes:
 
 Two mechanisms, use both:
 
-- `Processor::abort()` (JS thread) sets `cancelRequested_ = true` **and** calls `raw_->setCancelFlag()`.
-  `setCancelFlag()` flips an atomic that LibRaw's decoders and demosaic loops poll via `checkCancel()`,
-  throwing `LIBRAW_EXCEPTION_CANCELLED_BY_CALLBACK` internally; the current stage returns
-  `LIBRAW_CANCELLED_BY_CALLBACK` (-100010, not -8 -- see the T06 correction below).
-- The progress callback's return value cancels between stages for code paths that don't poll the flag.
+- `setCancelFlag()`, called directly from the JS thread when the caller cancels. It flips LibRaw's own
+  atomic `_exitflag`, which most raw decoders poll via `checkCancel()` (throwing
+  `LIBRAW_EXCEPTION_CANCELLED_BY_CALLBACK` internally; the current stage returns
+  `LIBRAW_CANCELLED_BY_CALLBACK`, -100010, not -8 -- see the T06 correction below). This is the *only*
+  mechanism that interrupts `unpack()` mid-decode: LibRaw's progress callback for `unpack()` fires just
+  once at the very start and once at the very end (`LIBRAW_PROGRESS_LOAD_RAW` 0/2 and 1/2), never while
+  the per-row/per-tile decode loop itself is running.
+- LibRaw's progress callback, made to return non-zero once cancellation is requested. This is the *only*
+  mechanism `dcraw_process()`/`identify()` check at all -- `checkCancel()`/`_exitflag` is never polled
+  anywhere in `src/postprocessing/`, `src/preprocessing/` or `src/metadata/identify.cpp` (0.22.2). One
+  partial exception: `ahd_demosaic()` polls the progress callback itself once per tile-row inside its own
+  (possibly OpenMP-parallel) loop, so the AHD demosaic algorithm specifically is interrupted promptly;
+  other demosaic algorithms (VNG/PPG/DHT/AAHD/xtrans variants) are only interrupted at the coarse
+  checkpoints between named substages (`CONVERT_RGB`, `SCALE_COLORS`, `HIGHLIGHTS`, ...).
 
-Map `AbortSignal`: in JS, `signal.addEventListener('abort', () => native.abort(), { once: true })`; reject
-with an `AbortError`-compatible `LibRawError` (`code: 'ABORT_ERR'`, LibRaw code -100010). Clear the flag
-(`clearCancelFlag()`) in `OnOK`/`OnError` before the next job.
+`open_buffer()`/`open_file()` call `identify()` internally, which only checks the progress callback once,
+near the very end of parsing (`RUN_CALLBACK(LIBRAW_PROGRESS_IDENTIFY, 1, 2)`) -- for practical purposes
+open/parse of a raw file's header is not interruptible mid-parse by either mechanism. This only affects
+latency, not correctness: header parsing is single-digit milliseconds.
+
+> **T09 update:** this repo's actual implementation (`src/cancel.h`/`.cc`, `src/async_workers.h`,
+> `src/fused.cc`) does not add a persistent `Processor::abort()`/`native.abort()` method as sketched
+> above and in `docs/reference/proposed-binding-api.md`'s `raw.abort();` line. Instead every
+> Promise-returning method (fused `decode`/`identify`/`thumbnail` and every `Processor` async stage
+> method) returns `{ promise, cancel }` from the native side; `lib/fused.cjs`/`lib/processor.cjs` call
+> `cancel()` internally from the caller's `signal`'s `'abort'` listener and hand back a plain Promise, so
+> the public JS API is unchanged from T07/T08's. `cancel()` sets a per-job atomic flag (polled by the
+> installed progress callback, per the second bullet above) **and** calls `setCancelFlag()` directly (the
+> first bullet) in the same call -- both mechanisms fire from one `cancel()` invocation, there is no
+> separate "map AbortSignal to abort()" step. See `proposed-binding-api.md`'s own correction note for the
+> rejection shape (no `'ABORT_ERR'` string code -- `code` is the numeric `-100010`, `name` is
+> `'LIBRAW_CANCELLED_BY_CALLBACK'`, plus `aborted: true`) and the `needsRecycle_` state-machine rule for
+> `Processor`.
 
 > **Correction (T06):** `LIBRAW_CANCELLED_BY_CALLBACK` is **-100010** in the vendored 0.22.2
 > `libraw/libraw_const.h` (`enum LibRaw_errors`), not -8 (-8 is `LIBRAW_NOT_IMPLEMENTED`). This doc's two
-> mentions of "-8" above were wrong; `docs/plan/tasks.md`'s T09 acceptance text ("code === -8") has the
-> same error and should be corrected when T09 is implemented.
+> mentions of "-8" above were wrong; `docs/plan/tasks.md`'s T09 acceptance text already says `-100010`, not
+> `-8` (re-checked while implementing T09 -- nothing left to correct there).
 > `scripts/gen-errors.js` (T06, `src/errors.cc` / `lib/generated/libraw-errors.cjs`) generates the
 > authoritative code/name table from that header, so this is not just a one-off typo fix -- any future
 > hand-written `LIBRAW_*` numeric literal in this repo's docs or code should be checked against it.
 
 Latency: LibRaw checks the flag per row/tile in most decoders; expect abort to land within tens of
 milliseconds during `unpack`/`dcraw_process`, longer inside a single stage that does not poll (e.g. some
-tables setup).
+tables setup). Measured on this development machine (`test/cancel.test.ts`, `IMGP5127.DNG`, unpack ~420 ms):
+abort-to-rejection latency well under 1 ms for both `decode()` and `Processor.unpack()` -- `checkCancel()`
+is polled far more often than "per row" for this decoder.
 
 ## 4. Progress and events
 
@@ -112,7 +138,8 @@ writes into `imgdata.params` guarded by `busy_`.
 
 ## 7. Tests
 
-- Abort during `unpack` of a 16 MP file resolves within 100 ms with `ABORT_ERR`.
+- Abort during `unpack` of a 16 MP file resolves within 100 ms with `LIBRAW_CANCELLED_BY_CALLBACK`
+  (`code: -100010`, `aborted: true` -- see the T09 update above).
 - Concurrent `decode` on 6 instances in 6 worker_threads for 50 iterations: no crash, no leak
   (watch RSS), results identical to sequential.
 - Busy guard: second call rejects immediately.

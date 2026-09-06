@@ -37,7 +37,6 @@ await raw.process({ signal?, onProgress? })         // dcraw_process (re-callabl
 await raw.image({ output? })                        // copy_mem_image into V8 buffer
 await raw.writePpmTiff(path); await raw.writeThumb(path);
 raw.errorCount(); raw.warnings; raw.decoderInfo(); raw.isFujiRotated(); raw.color(row, col);
-raw.abort();                                         // setCancelFlag on the in-flight worker
 raw.recycle(); raw.close();                          // recycle(); close() also frees the object
 
 // --- static ---
@@ -64,3 +63,24 @@ Rules:
 > and optional-argument members in the same group (`color(row, col)`, `thumbOK(maxsz?)`) and with the
 > native `Napi::ObjectWrap` exposing every one of them as an `InstanceMethod`. `raw.metadata`/`raw.thumbs`/
 > `raw.warnings` (true data, not LibRaw method calls) remain properties once implemented (T08/T14a).
+
+> **Correction (T09):** there is no `raw.abort()` method -- the sketch's `raw.abort();` line above was
+> removed. Every Promise-returning `Processor` method already accepts `{ signal? }` (its last argument;
+> `image()` folds it into its existing options object) and is cancelled the normal `AbortController`/
+> `AbortSignal` way: `const controller = new AbortController(); const p = raw.unpack({ signal:
+> controller.signal }); controller.abort();`. Internally the native side returns `{ promise, cancel }`
+> (`src/cancel.h`) and `lib/processor.cjs` wires `cancel` to the `signal` itself, but that is never
+> JS-visible -- `raw.unpack(...)` still returns a plain `Promise`, exactly as sketched above. A cancelled
+> call rejects with `LibRawError { code: -100010, name: 'LIBRAW_CANCELLED_BY_CALLBACK', stage, aborted:
+> true }`, same shape whether the signal was already aborted before the call or fired mid-flight.
+>
+> A cancelled stage leaves `Processor`'s underlying LibRaw instance in a state that is not necessarily
+> safe to keep decoding through (LibRaw's own decoders/demosaic loops can be interrupted mid-loop, with
+> `imgdata`/`rawdata` partially mutated -- see `docs/how-to/implement-async-decode-with-cancellation.md`
+> §3 for exactly which stages actually get interrupted and how). So: **the next call that would advance or
+> re-run a stage (`unpack`, `unpackThumb`, `process`, `image`, `thumb`, `adjustSizesInfoOnly`, and every
+> zero-argument introspection method that requires "opened", such as `errorCount()`/`decoderInfo()`/
+> `color()`) throws/rejects `LIBRAW_OUT_OF_ORDER_CALL` after a cancelled stage, until `recycle()`,
+> `close()`, or a fresh `open()`/`openBuffer()`/`openFile()` call** (those three are the only calls exempt
+> -- `recycle()`/`close()` clear the condition, and `open*` resets the object's state anyway). This applies
+> even to retrying the *same* stage that was cancelled, not just to advancing further.

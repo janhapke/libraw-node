@@ -85,4 +85,33 @@ Napi::Error MakeCancelledError(Napi::Env env, const char* stage) {
   return err;
 }
 
+Napi::Error MakeStageError(Napi::Env env, int code, const char* stage) {
+  if (code == LIBRAW_CANCELLED_BY_CALLBACK) {
+    return MakeCancelledError(env, stage);
+  }
+  return MakeProcessorError(env, code, stage);
+}
+
+// T09: moved here from src/fused.cc's anonymous namespace (T08) so
+// src/processor.cc's async stage methods can share it verbatim instead of
+// duplicating the "is this an AbortSignal, is it already aborted" checks.
+bool RejectIfAborted(Napi::Env env, Napi::Object opts, const char* stage, Napi::Promise::Deferred deferred) {
+  if (!opts.Has("signal")) return false;
+  Napi::Value sig = opts.Get("signal");
+  if (sig.IsUndefined() || sig.IsNull()) return false;
+  if (!sig.IsObject()) {
+    throw Napi::TypeError::New(env, std::string(stage) + "({ signal }): signal must be an AbortSignal");
+  }
+  Napi::Object sigObj = sig.As<Napi::Object>();
+  if (!sigObj.Has("aborted")) {
+    throw Napi::TypeError::New(env,
+                                std::string(stage) + "({ signal }): signal must be an AbortSignal (missing .aborted)");
+  }
+  if (sigObj.Get("aborted").ToBoolean()) {
+    deferred.Reject(MakeCancelledError(env, stage).Value());
+    return true;
+  }
+  return false;
+}
+
 }  // namespace libraw_node

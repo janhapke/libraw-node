@@ -1,5 +1,6 @@
 #include "fused.h"
 
+#include "cancel.h"
 #include "errors.h"
 #include "image_format.h"
 
@@ -89,31 +90,8 @@ void ValidateKeys(Napi::Env env, Napi::Object obj, const std::vector<std::string
   }
 }
 
-// Returns true if `opts.signal` is already aborted -- in that case
-// `deferred` has already been rejected with the LIBRAW_CANCELLED_BY_CALLBACK
-// shape (docs/plan/tasks.md T08) and the caller must return the promise
-// immediately without touching LibRaw at all. Throws a TypeError if
-// `signal` is present but does not look like an AbortSignal. Real
-// cancellation (aborting mid-call) is wired in T09; this is only the
-// already-aborted-before-we-start fast path.
-bool RejectIfAborted(Napi::Env env, Napi::Object opts, const char* stage, Napi::Promise::Deferred deferred) {
-  if (!opts.Has("signal")) return false;
-  Napi::Value sig = opts.Get("signal");
-  if (sig.IsUndefined() || sig.IsNull()) return false;
-  if (!sig.IsObject()) {
-    throw Napi::TypeError::New(env, std::string(stage) + "({ signal }): signal must be an AbortSignal");
-  }
-  Napi::Object sigObj = sig.As<Napi::Object>();
-  if (!sigObj.Has("aborted")) {
-    throw Napi::TypeError::New(env,
-                                std::string(stage) + "({ signal }): signal must be an AbortSignal (missing .aborted)");
-  }
-  if (sigObj.Get("aborted").ToBoolean()) {
-    deferred.Reject(MakeCancelledError(env, stage).Value());
-    return true;
-  }
-  return false;
-}
+// T09: RejectIfAborted (the pre-abort fast path) moved to src/errors.h/.cc
+// so src/processor.cc can share it verbatim.
 
 Napi::Object OptionsObjectOrEmpty(Napi::Env env, const Napi::CallbackInfo& info, const char* stage) {
   if (info.Length() > 1 && !info[1].IsUndefined()) {
@@ -232,20 +210,31 @@ DecodeOptions ParseDecodeOptions(Napi::Env env, Napi::Object opts,
 class DecodeWorker : public Napi::AsyncWorker {
  public:
   DecodeWorker(Napi::Env env, Napi::Buffer<uint8_t> input, DecodeOptions opts,
-               Napi::Reference<Napi::Buffer<uint8_t>>&& intoRef, Napi::Promise::Deferred deferred)
+               Napi::Reference<Napi::Buffer<uint8_t>>&& intoRef, Napi::Promise::Deferred deferred,
+               std::shared_ptr<JobCancelState> cancelState, std::shared_ptr<LibRaw> raw)
       : Napi::AsyncWorker(env),
         bufRef_(Napi::Persistent(input)),
         data_(input.Data()),
         length_(input.Length()),
         opts_(opts),
         intoRef_(std::move(intoRef)),
-        deferred_(deferred) {}
+        deferred_(deferred),
+        cancelState_(std::move(cancelState)),
+        raw_(std::move(raw)) {}
 
  protected:
   // Threadpool thread: open -> apply params -> unpack -> process. No
   // Napi::* calls here (see this file's header comment).
   void Execute() override {
-    raw_ = std::make_unique<LibRaw>();
+    // T09: cancelled between Queue() (JS thread) and this method actually
+    // starting -- bail without touching raw_ any further than the progress
+    // handler installed below (see src/cancel.h's class comment for why
+    // open_buffer/unpack/dcraw_process each need that handler regardless).
+    if (cancelState_->flag->load()) {
+      rc_ = LIBRAW_CANCELLED_BY_CALLBACK;
+      return;
+    }
+    raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
     if (opts_.has_shot_select) {
       raw_->imgdata.rawparams.shot_select = opts_.shot_select;
     }
@@ -273,9 +262,13 @@ class DecodeWorker : public Napi::AsyncWorker {
   // into it, then recycle.
   void OnOK() override {
     Napi::Env env = Env();
+    // T09: once this settles, `cancel()` (src/cancel.cc's
+    // MakeLibRawCancelFunction) becomes a no-op even if the caller's signal
+    // fires late or lib/fused.cjs somehow failed to remove its listener.
+    cancelState_->active->store(false);
     if (rc_ != LIBRAW_SUCCESS) {
       if (raw_) raw_->recycle();
-      deferred_.Reject(MakeProcessorError(env, rc_, "decode").Value());
+      deferred_.Reject(MakeStageError(env, rc_, "decode").Value());
       return;
     }
     try {
@@ -326,6 +319,7 @@ class DecodeWorker : public Napi::AsyncWorker {
   }
 
   void OnError(const Napi::Error&) override {
+    cancelState_->active->store(false);
     if (raw_) raw_->recycle();
     deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "decode").Value());
   }
@@ -337,8 +331,13 @@ class DecodeWorker : public Napi::AsyncWorker {
   DecodeOptions opts_;
   Napi::Reference<Napi::Buffer<uint8_t>> intoRef_;
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<JobCancelState> cancelState_;
 
-  std::unique_ptr<LibRaw> raw_;
+  // T09: constructed on the JS thread (Decode(), before Queue()) rather
+  // than here in Execute(), specifically so MakeLibRawCancelFunction's
+  // closure can hold its own shared_ptr copy -- see src/cancel.h's
+  // MakeLibRawCancelFunction comment for why that matters.
+  std::shared_ptr<LibRaw> raw_;
   int rc_ = LIBRAW_SUCCESS;
   int width_ = 0, height_ = 0, colors_ = 0, bps_ = 0, flip_ = 0;
   unsigned int warnings_ = 0;
@@ -374,18 +373,31 @@ IdentifyOptions ParseIdentifyOptions(Napi::Env env, Napi::Object opts) {
 
 class IdentifyWorker : public Napi::AsyncWorker {
  public:
-  IdentifyWorker(Napi::Env env, Napi::Buffer<uint8_t> input, IdentifyOptions opts, Napi::Promise::Deferred deferred)
+  IdentifyWorker(Napi::Env env, Napi::Buffer<uint8_t> input, IdentifyOptions opts, Napi::Promise::Deferred deferred,
+                  std::shared_ptr<JobCancelState> cancelState, std::shared_ptr<LibRaw> raw)
       : Napi::AsyncWorker(env),
         bufRef_(Napi::Persistent(input)),
         data_(input.Data()),
         length_(input.Length()),
         opts_(opts),
-        deferred_(deferred) {}
+        deferred_(deferred),
+        cancelState_(std::move(cancelState)),
+        raw_(std::move(raw)) {}
 
  protected:
-  // open_buffer + adjust_sizes_info_only -- no unpack, no decode.
+  // open_buffer + adjust_sizes_info_only -- no unpack, no decode. See
+  // src/cancel.h's class comment: neither call polls LibRaw's progress
+  // callback more than once or twice each, so cancellation here is mostly
+  // the pre-abort fast path in practice (Identify(), below) -- wired anyway
+  // for consistency ("every async method and helper", docs/plan/tasks.md
+  // T09) and because adjust_sizes_info_only can still be slow for some
+  // decoders (get_decoder_info-class introspection).
   void Execute() override {
-    raw_ = std::make_unique<LibRaw>();
+    if (cancelState_->flag->load()) {
+      rc_ = LIBRAW_CANCELLED_BY_CALLBACK;
+      return;
+    }
+    raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
     // "OR it into the existing default" (docs/plan/tasks.md T08): the
     // caller's own rawparams.options (0 if not given) plus
     // CHECK_THUMBNAILS_KNOWN_VENDORS, which fixes 0-sized/unknown thumbs_list
@@ -402,9 +414,10 @@ class IdentifyWorker : public Napi::AsyncWorker {
 
   void OnOK() override {
     Napi::Env env = Env();
+    cancelState_->active->store(false);
     if (rc_ != LIBRAW_SUCCESS) {
       if (raw_) raw_->recycle();
-      deferred_.Reject(MakeProcessorError(env, rc_, "identify").Value());
+      deferred_.Reject(MakeStageError(env, rc_, "identify").Value());
       return;
     }
 
@@ -468,6 +481,7 @@ class IdentifyWorker : public Napi::AsyncWorker {
   }
 
   void OnError(const Napi::Error&) override {
+    cancelState_->active->store(false);
     if (raw_) raw_->recycle();
     deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "identify").Value());
   }
@@ -478,8 +492,8 @@ class IdentifyWorker : public Napi::AsyncWorker {
   size_t length_;
   IdentifyOptions opts_;
   Napi::Promise::Deferred deferred_;
-
-  std::unique_ptr<LibRaw> raw_;
+  std::shared_ptr<JobCancelState> cancelState_;
+  std::shared_ptr<LibRaw> raw_;
   int rc_ = LIBRAW_SUCCESS;
 };
 
@@ -503,17 +517,24 @@ ThumbnailOptions ParseThumbnailOptions(Napi::Env env, Napi::Object opts) {
 class ThumbnailWorker : public Napi::AsyncWorker {
  public:
   ThumbnailWorker(Napi::Env env, Napi::Buffer<uint8_t> input, ThumbnailOptions opts,
-                   Napi::Promise::Deferred deferred)
+                   Napi::Promise::Deferred deferred, std::shared_ptr<JobCancelState> cancelState,
+                   std::shared_ptr<LibRaw> raw)
       : Napi::AsyncWorker(env),
         bufRef_(Napi::Persistent(input)),
         data_(input.Data()),
         length_(input.Length()),
         opts_(opts),
-        deferred_(deferred) {}
+        deferred_(deferred),
+        cancelState_(std::move(cancelState)),
+        raw_(std::move(raw)) {}
 
  protected:
   void Execute() override {
-    raw_ = std::make_unique<LibRaw>();
+    if (cancelState_->flag->load()) {
+      rc_ = LIBRAW_CANCELLED_BY_CALLBACK;
+      return;
+    }
+    raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
     // Same "fix 0-sized/unknown entries" rationale as identify() (see
     // IdentifyWorker::Execute) -- must be set before open_buffer.
     raw_->imgdata.rawparams.options |= LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_KNOWN_VENDORS;
@@ -551,9 +572,10 @@ class ThumbnailWorker : public Napi::AsyncWorker {
 
   void OnOK() override {
     Napi::Env env = Env();
+    cancelState_->active->store(false);
     if (rc_ != LIBRAW_SUCCESS) {
       if (raw_) raw_->recycle();
-      deferred_.Reject(MakeProcessorError(env, rc_, "thumbnail").Value());
+      deferred_.Reject(MakeStageError(env, rc_, "thumbnail").Value());
       return;
     }
 
@@ -576,6 +598,7 @@ class ThumbnailWorker : public Napi::AsyncWorker {
   }
 
   void OnError(const Napi::Error&) override {
+    cancelState_->active->store(false);
     if (img_) {
       LibRaw::dcraw_clear_mem(img_);
       img_ = nullptr;
@@ -590,8 +613,9 @@ class ThumbnailWorker : public Napi::AsyncWorker {
   size_t length_;
   ThumbnailOptions opts_;
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<JobCancelState> cancelState_;
 
-  std::unique_ptr<LibRaw> raw_;
+  std::shared_ptr<LibRaw> raw_;
   int rc_ = LIBRAW_SUCCESS;
   int flip_ = 0;
   int width_ = 0, height_ = 0;
@@ -599,6 +623,15 @@ class ThumbnailWorker : public Napi::AsyncWorker {
 };
 
 }  // namespace
+
+// T09: every fused helper below now returns `{ promise, cancel }`
+// (src/cancel.h's WrapPromiseWithCancel) instead of a bare Promise --
+// lib/fused.cjs unwraps it, wires `cancel` to the caller's `signal`
+// internally, and returns a plain Promise from decode()/identify()/
+// thumbnail() as before. `raw` is constructed here, on the JS thread,
+// specifically so the `cancel` closure (MakeLibRawCancelFunction) can hold
+// its own shared_ptr to it before Execute() -- which runs later, on a
+// threadpool thread -- ever gets a chance to touch it.
 
 Napi::Value Decode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -608,16 +641,19 @@ Napi::Value Decode(const Napi::CallbackInfo& info) {
     Napi::Object opts = OptionsObjectOrEmpty(env, info, "decode");
 
     if (RejectIfAborted(env, opts, "decode", deferred)) {
-      return deferred.Promise();
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
     }
 
     Napi::Reference<Napi::Buffer<uint8_t>> intoRef;  // stays empty unless output.into is given
     DecodeOptions parsed = ParseDecodeOptions(env, opts, intoRef);
-    (new DecodeWorker(env, input, parsed, std::move(intoRef), deferred))->Queue();
+    auto cancelState = std::make_shared<JobCancelState>();
+    auto raw = std::make_shared<LibRaw>();
+    (new DecodeWorker(env, input, parsed, std::move(intoRef), deferred, cancelState, raw))->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), MakeLibRawCancelFunction(env, cancelState, raw));
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Identify(const Napi::CallbackInfo& info) {
@@ -626,12 +662,20 @@ Napi::Value Identify(const Napi::CallbackInfo& info) {
   try {
     Napi::Buffer<uint8_t> input = RequireBufferArg(env, info, "identify");
     Napi::Object opts = OptionsObjectOrEmpty(env, info, "identify");
+
+    if (RejectIfAborted(env, opts, "identify", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
+
     IdentifyOptions parsed = ParseIdentifyOptions(env, opts);
-    (new IdentifyWorker(env, input, parsed, deferred))->Queue();
+    auto cancelState = std::make_shared<JobCancelState>();
+    auto raw = std::make_shared<LibRaw>();
+    (new IdentifyWorker(env, input, parsed, deferred, cancelState, raw))->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), MakeLibRawCancelFunction(env, cancelState, raw));
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Thumbnail(const Napi::CallbackInfo& info) {
@@ -642,15 +686,18 @@ Napi::Value Thumbnail(const Napi::CallbackInfo& info) {
     Napi::Object opts = OptionsObjectOrEmpty(env, info, "thumbnail");
 
     if (RejectIfAborted(env, opts, "thumbnail", deferred)) {
-      return deferred.Promise();
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
     }
 
     ThumbnailOptions parsed = ParseThumbnailOptions(env, opts);
-    (new ThumbnailWorker(env, input, parsed, deferred))->Queue();
+    auto cancelState = std::make_shared<JobCancelState>();
+    auto raw = std::make_shared<LibRaw>();
+    (new ThumbnailWorker(env, input, parsed, deferred, cancelState, raw))->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), MakeLibRawCancelFunction(env, cancelState, raw));
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 }  // namespace libraw_node

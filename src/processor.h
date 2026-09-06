@@ -30,6 +30,23 @@
 //   thumbUnpacked_   -- unpackThumbSync succeeded; required by thumbSync.
 // recycle() resets every flag (matches LibRaw's own recycle() semantics:
 // free everything, keep the object, ready to open() again).
+//
+// T09 adds one more flag, needsRecycle_: set when an async stage
+// (unpack/unpackThumb/process/image/thumb/adjustSizesInfoOnly) is cancelled
+// mid-flight (its worker's Run() returned LIBRAW_CANCELLED_BY_CALLBACK --
+// see src/async_workers.h's ProcessorAsyncWorker::OnOK). LibRaw's own
+// decoders/demosaic loops leave imgdata/rawdata partially allocated/
+// mutated when interrupted this way (see src/cancel.h for exactly which
+// stages actually get interrupted and how), so treating a cancelled
+// Processor as still fully usable would risk calling into LibRaw on that
+// half-finished state. While needsRecycle_ is set, RequireOpened -- and
+// therefore every stage-advancing call that goes through it, directly or
+// via RequireUnpacked/RequireProcessed/RequireThumbUnpacked, plus every
+// zero-argument introspection getter that requires "opened" -- throws/
+// rejects LIBRAW_OUT_OF_ORDER_CALL. recycle() and close() are exempt (they
+// clear it); so is a fresh openBuffer()/openFile() call (RequireNotClosed
+// does not check needsRecycle_, and ResetState() clears it), matching the
+// task text's "the next stage call (other than recycle/close/open)".
 #pragma once
 
 #include <napi.h>
@@ -123,6 +140,12 @@ class Processor : public Napi::ObjectWrap<Processor> {
   bool unpacked_ = false;
   bool processed_ = false;
   bool thumbUnpacked_ = false;
+
+  // T09: see the state-machine comment above. Set by
+  // ProcessorAsyncWorker::OnOK (src/async_workers.h) when a job's Run()
+  // returned LIBRAW_CANCELLED_BY_CALLBACK; cleared by ResetState() (i.e. by
+  // recycle() and by a fresh openBuffer()/openFile()).
+  bool needsRecycle_ = false;
 };
 
 }  // namespace libraw_node

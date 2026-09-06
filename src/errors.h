@@ -71,4 +71,22 @@ void ThrowBusyError(Napi::Env env, const char* stage);
 // this for cancellation *during* a call, not just before it starts.
 Napi::Error MakeCancelledError(Napi::Env env, const char* stage);
 
+// T09: picks MakeCancelledError (code, name, `aborted: true`) when `code` is
+// LIBRAW_CANCELLED_BY_CALLBACK, MakeProcessorError otherwise -- every
+// OnOK()/OnError() that rejects with a stage's raw LIBRAW_* return code
+// (src/async_workers.h, src/fused.cc) uses this so a mid-flight cancellation
+// carries the same `aborted: true` marker as the pre-abort fast path
+// (RejectIfAborted below), not just the same code/name.
+Napi::Error MakeStageError(Napi::Env env, int code, const char* stage);
+
+// T09: shared pre-abort fast path for every async entry point (the fused
+// helpers, src/fused.cc, and Processor's stage methods, src/processor.cc).
+// Returns true if `opts.signal` is already aborted -- in that case
+// `deferred` has already been rejected with the MakeCancelledError() shape
+// and the caller must return immediately without touching LibRaw at all.
+// Throws a TypeError if `signal` is present but does not look like an
+// AbortSignal. `opts` may be an empty object (no `signal` key at all): that
+// is not an error, just "no signal given", and this returns false.
+bool RejectIfAborted(Napi::Env env, Napi::Object opts, const char* stage, Napi::Promise::Deferred deferred);
+
 }  // namespace libraw_node

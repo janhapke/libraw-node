@@ -1,6 +1,7 @@
 #include "processor.h"
 
 #include "async_workers.h"
+#include "cancel.h"
 #include "errors.h"
 #include "image_format.h"
 
@@ -19,6 +20,18 @@ unsigned int ParseFlags(const Napi::CallbackInfo& info) {
     }
   }
   return LIBRAW_OPTIONS_NONE;
+}
+
+// T09: every async stage method below takes its `{ signal? }` options object
+// as its last argument (openBuffer(buffer, opts?), unpack(opts?),
+// unpackThumb(index?, opts?), image({ into?, bgr?, stride?, signal? }), ...)
+// -- this pulls it out (or an empty object if `value` isn't one), for
+// RejectIfAborted (src/errors.h, shared with src/fused.cc) to check.
+Napi::Object OptionsObjectOrEmpty(Napi::Env env, Napi::Value value) {
+  if (!value.IsUndefined() && value.IsObject()) {
+    return value.As<Napi::Object>();
+  }
+  return Napi::Object::New(env);
 }
 
 }  // namespace
@@ -82,6 +95,13 @@ void Processor::RequireOpened(Napi::Env env, const char* stage) {
   if (!opened_) {
     ThrowProcessorError(env, LIBRAW_OUT_OF_ORDER_CALL, stage);
   }
+  // T09: a cancelled stage leaves LibRaw's own internal state
+  // (imgdata/rawdata) possibly half-mutated -- see processor.h's
+  // needsRecycle_ comment. Blocks every stage-advancing call and
+  // "opened"-requiring getter until recycle()/close()/a fresh open() call.
+  if (needsRecycle_) {
+    ThrowProcessorError(env, LIBRAW_OUT_OF_ORDER_CALL, stage);
+  }
 }
 
 void Processor::RequireUnpacked(Napi::Env env, const char* stage) {
@@ -110,6 +130,7 @@ void Processor::ResetState() {
   unpacked_ = false;
   processed_ = false;
   thumbUnpacked_ = false;
+  needsRecycle_ = false;  // T09
 }
 
 // --- Input -----------------------------------------------------------------
@@ -328,6 +349,14 @@ Napi::Value Processor::Close(const Napi::CallbackInfo& info) {
 // the call itself. Only once every check passes does busy_ get set to true
 // and the corresponding AsyncWorker (src/async_workers.h) get queued; that
 // worker's OnOK/OnError always clears busy_ again.
+//
+// T09: every method below now returns `{ promise, cancel }`
+// (src/cancel.h's WrapPromiseWithCancel) instead of a bare Promise, and
+// accepts a trailing `{ signal? }` options object (an existing options
+// object, for image()) checked via the shared RejectIfAborted (src/errors.h)
+// for the pre-aborted fast path. lib/processor.cjs unwraps the result,
+// wires `cancel` to `signal` itself, and returns a plain Promise -- every
+// JS-visible signature is unchanged from T07's.
 
 Napi::Value Processor::OpenBuffer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -338,12 +367,19 @@ Napi::Value Processor::OpenBuffer(const Napi::CallbackInfo& info) {
       throw Napi::TypeError::New(env, "openBuffer(buffer): buffer must be a Buffer");
     }
     Napi::Buffer<uint8_t> input = info[0].As<Napi::Buffer<uint8_t>>();
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 1 ? info[1] : env.Undefined());
+    if (RejectIfAborted(env, opts, "openBuffer", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
-    (new OpenBufferWorker(env, this, info.This().As<Napi::Object>(), input, deferred))->Queue();
+    auto* worker = new OpenBufferWorker(env, this, info.This().As<Napi::Object>(), input, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Processor::OpenFile(const Napi::CallbackInfo& info) {
@@ -355,12 +391,19 @@ Napi::Value Processor::OpenFile(const Napi::CallbackInfo& info) {
       throw Napi::TypeError::New(env, "openFile(path): path must be a string");
     }
     std::string path = info[0].As<Napi::String>().Utf8Value();
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 1 ? info[1] : env.Undefined());
+    if (RejectIfAborted(env, opts, "openFile", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
-    (new OpenFileWorker(env, this, info.This().As<Napi::Object>(), path, deferred))->Queue();
+    auto* worker = new OpenFileWorker(env, this, info.This().As<Napi::Object>(), path, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Processor::Unpack(const Napi::CallbackInfo& info) {
@@ -368,15 +411,21 @@ Napi::Value Processor::Unpack(const Napi::CallbackInfo& info) {
   Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
   try {
     RequireOpened(env, "unpack");
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 0 ? info[0] : env.Undefined());
+    if (RejectIfAborted(env, opts, "unpack", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
     auto run = [](LibRaw& raw) { return raw.unpack(); };
-    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "unpack", run,
-                            SimpleStageWorker::Mark::kUnpacked, deferred))
-        ->Queue();
+    auto* worker = new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "unpack", run,
+                                          SimpleStageWorker::Mark::kUnpacked, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Processor::UnpackThumb(const Napi::CallbackInfo& info) {
@@ -384,19 +433,31 @@ Napi::Value Processor::UnpackThumb(const Napi::CallbackInfo& info) {
   Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
   try {
     RequireOpened(env, "unpackThumb");
-    bool hasIndex = info.Length() > 0 && !info[0].IsUndefined();
+    // unpackThumb(), unpackThumb(index), unpackThumb(opts) and
+    // unpackThumb(index, opts) all need to work -- only a number in
+    // position 0 is an index (T09 adds the opts-without-index shape; T07's
+    // callers only ever used unpackThumb() or unpackThumb(index)).
+    bool hasIndex = info.Length() > 0 && info[0].IsNumber();
     int index = hasIndex ? info[0].As<Napi::Number>().Int32Value() : 0;
+    Napi::Value optsArg = hasIndex ? (info.Length() > 1 ? info[1] : env.Undefined())
+                                    : (info.Length() > 0 ? info[0] : env.Undefined());
+    Napi::Object opts = OptionsObjectOrEmpty(env, optsArg);
+    if (RejectIfAborted(env, opts, "unpackThumb", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
     auto run = [hasIndex, index](LibRaw& raw) {
       return hasIndex ? raw.unpack_thumb_ex(index) : raw.unpack_thumb();
     };
-    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "unpackThumb", run,
-                            SimpleStageWorker::Mark::kThumbUnpacked, deferred))
-        ->Queue();
+    auto* worker = new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "unpackThumb", run,
+                                          SimpleStageWorker::Mark::kThumbUnpacked, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Processor::Process(const Napi::CallbackInfo& info) {
@@ -404,15 +465,21 @@ Napi::Value Processor::Process(const Napi::CallbackInfo& info) {
   Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
   try {
     RequireUnpacked(env, "process");
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 0 ? info[0] : env.Undefined());
+    if (RejectIfAborted(env, opts, "process", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
     auto run = [](LibRaw& raw) { return raw.dcraw_process(); };
-    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "process", run,
-                            SimpleStageWorker::Mark::kProcessed, deferred))
-        ->Queue();
+    auto* worker = new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "process", run,
+                                          SimpleStageWorker::Mark::kProcessed, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Processor::AdjustSizesInfoOnly(const Napi::CallbackInfo& info) {
@@ -420,18 +487,24 @@ Napi::Value Processor::AdjustSizesInfoOnly(const Napi::CallbackInfo& info) {
   Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
   try {
     RequireOpened(env, "adjustSizesInfoOnly");
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 0 ? info[0] : env.Undefined());
+    if (RejectIfAborted(env, opts, "adjustSizesInfoOnly", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
     auto run = [](LibRaw& raw) { return raw.adjust_sizes_info_only(); };
-    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "adjustSizesInfoOnly", run,
-                            SimpleStageWorker::Mark::kNone, deferred))
-        ->Queue();
+    auto* worker = new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "adjustSizesInfoOnly", run,
+                                          SimpleStageWorker::Mark::kNone, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
-// image({ into?, bgr?, stride? }) -> Promise<{ width, height, colors, bits, data }>.
+// image({ into?, bgr?, stride?, signal? }) -> Promise<{ width, height, colors, bits, data }>.
 // The output Buffer is allocated (or the caller-supplied `into` validated) on
 // the JS thread here, from get_mem_image_format -- exactly like ImageSync --
 // *before* the worker is constructed; the worker itself only runs
@@ -446,17 +519,19 @@ Napi::Value Processor::Image(const Napi::CallbackInfo& info) {
     int strideOverride = 0;
     Napi::Value intoValue;
 
-    if (info.Length() > 0 && info[0].IsObject()) {
-      Napi::Object opts = info[0].As<Napi::Object>();
-      if (opts.Has("bgr") && !opts.Get("bgr").IsUndefined()) {
-        bgr = opts.Get("bgr").ToBoolean();
-      }
-      if (opts.Has("stride") && !opts.Get("stride").IsUndefined()) {
-        strideOverride = opts.Get("stride").ToNumber().Int32Value();
-      }
-      if (opts.Has("into") && !opts.Get("into").IsUndefined()) {
-        intoValue = opts.Get("into");
-      }
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 0 ? info[0] : env.Undefined());
+    if (opts.Has("bgr") && !opts.Get("bgr").IsUndefined()) {
+      bgr = opts.Get("bgr").ToBoolean();
+    }
+    if (opts.Has("stride") && !opts.Get("stride").IsUndefined()) {
+      strideOverride = opts.Get("stride").ToNumber().Int32Value();
+    }
+    if (opts.Has("into") && !opts.Get("into").IsUndefined()) {
+      intoValue = opts.Get("into");
+    }
+
+    if (RejectIfAborted(env, opts, "image", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
     }
 
     int width = 0, height = 0, colors = 0, bps = 0;
@@ -481,13 +556,15 @@ Napi::Value Processor::Image(const Napi::CallbackInfo& info) {
     }
 
     busy_ = true;
-    (new ImageWorker(env, this, info.This().As<Napi::Object>(), out, static_cast<int>(stride), bgr, width, height,
-                      colors, bps, deferred))
-        ->Queue();
+    auto* worker = new ImageWorker(env, this, info.This().As<Napi::Object>(), out, static_cast<int>(stride), bgr,
+                                    width, height, colors, bps, deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 Napi::Value Processor::Thumb(const Napi::CallbackInfo& info) {
@@ -495,12 +572,19 @@ Napi::Value Processor::Thumb(const Napi::CallbackInfo& info) {
   Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
   try {
     RequireThumbUnpacked(env, "thumb");
+    Napi::Object opts = OptionsObjectOrEmpty(env, info.Length() > 0 ? info[0] : env.Undefined());
+    if (RejectIfAborted(env, opts, "thumb", deferred)) {
+      return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
+    }
     busy_ = true;
-    (new ThumbWorker(env, this, info.This().As<Napi::Object>(), deferred))->Queue();
+    auto* worker = new ThumbWorker(env, this, info.This().As<Napi::Object>(), deferred);
+    Napi::Function cancel = worker->MakeCancel(env);
+    worker->Queue();
+    return WrapPromiseWithCancel(env, deferred.Promise(), cancel);
   } catch (const Napi::Error& e) {
     deferred.Reject(e.Value());
+    return WrapPromiseWithCancel(env, deferred.Promise(), NoopCancel(env));
   }
-  return deferred.Promise();
 }
 
 // --- Introspection ---------------------------------------------------------
