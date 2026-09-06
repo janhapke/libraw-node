@@ -1,0 +1,68 @@
+name: build
+
+on:
+  push: {}
+  pull_request: {}
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Read pinned Node version
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - run: npm run gen:check
+
+      - run: ./scripts/build-linux.sh x64
+
+      - run: ./scripts/check-binary.sh prebuilds/linux-x64/node.napi.node
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-linux-x64
+          path: prebuilds/linux-x64
+
+  test-linux-x64:
+    needs: build-linux-x64
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned Node version
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-linux-x64
+          path: prebuilds/linux-x64
+
+      - run: npm test
+
+      - run: ./scripts/check-binary.sh prebuilds/linux-x64/node.napi.node
+
+      - name: Typecheck consumer-ts example against published types
+        run: |
+          cd examples/consumer-ts
+          npm ci
+          npx tsc --noEmit
