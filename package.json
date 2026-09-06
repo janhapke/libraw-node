@@ -17,7 +17,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build:linux": "echo 'not implemented yet (see docs/plan/tasks.md T02)' && exit 1",
+    "build:linux": "scripts/build-linux.sh x64",
     "test": "vitest run"
   },
   "dependencies": {
