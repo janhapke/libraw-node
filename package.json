@@ -23,7 +23,9 @@
     "gen:enums": "node scripts/gen-enums.js",
     "gen:manifest": "node scripts/gen-manifest.js",
     "gen:params-cc": "node scripts/gen-params-cc.js",
-    "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-enums.js --check && node scripts/gen-manifest.js --check && node scripts/gen-params-cc.js --check",
+    "gen:metadata": "node scripts/gen-metadata.js",
+    "gen:metadata-cc": "node scripts/gen-metadata-cc.js",
+    "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-enums.js --check && node scripts/gen-manifest.js --check && node scripts/gen-params-cc.js --check && node scripts/gen-metadata.js --check && node scripts/gen-metadata-cc.js --check",
     "test": "vitest run --reporter=verbose"
   },
   "dependencies": {

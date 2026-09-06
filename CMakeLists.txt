@@ -236,6 +236,7 @@ add_library(addon SHARED
   src/errors.cc
   src/events.cc
   src/fused.cc
+  src/generated/metadata.gen.cc
   src/generated/params.gen.cc
   src/image_format.cc
   src/processor.cc

@@ -114,6 +114,17 @@ class Processor : public Napi::ObjectWrap<Processor> {
   Napi::Value Color(const Napi::CallbackInfo& info);
   Napi::Value ThumbOK(const Napi::CallbackInfo& info);
 
+  // T14a: read-only getter (registered as an InstanceAccessor, not an
+  // InstanceMethod -- accessed as `processor.metadata`, not
+  // `processor.metadata()`) mirroring src/fused.cc's identify().metadata
+  // (src/metadata.h's MetadataToObject). Requires "opened" like every other
+  // introspection getter (RequireOpened -- throws LIBRAW_OUT_OF_ORDER_CALL
+  // before openBufferSync/openFileSync has succeeded); unlike those, it
+  // takes no stage-specific state beyond "opened" since every field it
+  // reads (idata/sizes/other/lens/color/makernotes.common) is filled in by
+  // open_buffer/open_file's own parsing, not by unpack/process.
+  Napi::Value Metadata(const Napi::CallbackInfo& info);
+
   // T12: generated parameter application (src/params.h,
   // src/generated/params.gen.cc). setRawParams/setParams are synchronous
   // (validation is cheap and never touches LibRaw's decode path) and gated

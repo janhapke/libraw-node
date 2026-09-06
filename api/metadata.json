@@ -1,0 +1,1651 @@
+{
+  "generator": "scripts/gen-metadata.js",
+  "libraw": {
+    "version": "0.22.2",
+    "major": 0,
+    "minor": 22,
+    "patch": 2
+  },
+  "source": "vendor/LibRaw/libraw/libraw_types.h",
+  "groups": {
+    "idata": {
+      "cType": "libraw_iparams_t",
+      "imgdataPath": "imgdata.idata"
+    },
+    "sizes": {
+      "cType": "libraw_image_sizes_t",
+      "imgdataPath": "imgdata.sizes"
+    },
+    "other": {
+      "cType": "libraw_imgother_t",
+      "imgdataPath": "imgdata.other"
+    },
+    "lens": {
+      "cType": "libraw_lensinfo_t",
+      "imgdataPath": "imgdata.lens"
+    },
+    "color": {
+      "cType": "libraw_colordata_t",
+      "imgdataPath": "imgdata.color"
+    },
+    "makernotes.common": {
+      "cType": "libraw_metadata_common_t",
+      "imgdataPath": "imgdata.makernotes.common"
+    }
+  },
+  "structs": {
+    "libraw_iparams_t": {
+      "cType": "libraw_iparams_t",
+      "fieldOrder": [
+        "guard",
+        "make",
+        "model",
+        "software",
+        "normalized_make",
+        "normalized_model",
+        "maker_index",
+        "raw_count",
+        "dng_version",
+        "is_foveon",
+        "colors",
+        "filters",
+        "xtrans",
+        "xtrans_abs",
+        "cdesc",
+        "xmplen",
+        "xmpdata"
+      ],
+      "fields": {
+        "guard": {
+          "doc": "Internal struct-validity guard bytes; not meaningful to callers.",
+          "type": "unsupported",
+          "notes": "Internal LibRaw bookkeeping (not documented as a public field); no useful JS representation.",
+          "cType": "char",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "make": {
+          "doc": "Camera make, as parsed from the file (may need normalization -- see normalized_make).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "model": {
+          "doc": "Camera model, as parsed from the file (may need normalization -- see normalized_model).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "software": {
+          "doc": "Software/firmware string embedded in the file, if any.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "normalized_make": {
+          "doc": "Make normalized against LibRaw's camera database (canonical vendor name).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "normalized_model": {
+          "doc": "Model normalized against LibRaw's camera database (canonical model name).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "maker_index": {
+          "doc": "Index into LibRaw's internal maker table for normalized_make.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "raw_count": {
+          "doc": "Number of RAW frames/images stored in this file (e.g. multi-shot/burst formats).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "dng_version": {
+          "doc": "DNG version encoded as LibRaw packs it (0 if this is not a DNG file).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "unsigned"
+        },
+        "is_foveon": {
+          "doc": "Non-zero if this is a Foveon (layered-sensor) file.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "colors": {
+          "doc": "Number of colors in the RAW data (1, 3, or 4).",
+          "type": "int",
+          "cType": "int"
+        },
+        "filters": {
+          "doc": "CFA pattern bitmask LibRaw uses internally to decode the Bayer/X-Trans layout (0 or 9 for non-Bayer/X-Trans sensors).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "xtrans": {
+          "doc": "6x6 X-Trans CFA pattern (color-plane indices 0..3), only meaningful when filters == 9.",
+          "type": "matrix",
+          "cType": "char",
+          "cArrayDims": [
+            6,
+            6
+          ]
+        },
+        "xtrans_abs": {
+          "doc": "6x6 X-Trans CFA pattern in absolute (unshifted) sensor coordinates.",
+          "type": "matrix",
+          "cType": "char",
+          "cArrayDims": [
+            6,
+            6
+          ]
+        },
+        "cdesc": {
+          "doc": "Color plane description string (e.g. \"RGBG\"), indexed by the values in filters/xtrans.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            5
+          ]
+        },
+        "xmplen": {
+          "doc": "Length in bytes of the embedded XMP packet (0 if none). See xmpdata for why the packet itself is not exposed.",
+          "type": "uint",
+          "unset": 0,
+          "cType": "unsigned"
+        },
+        "xmpdata": {
+          "doc": "Pointer to the embedded XMP packet's raw bytes.",
+          "type": "unsupported",
+          "notes": "Raw char* into LibRaw-owned memory; exposing it safely would need a Buffer copy keyed off xmplen, which is a reasonable future addition but out of scope for T14a's core-struct mirror.",
+          "cType": "char*",
+          "pointerDepth": 1
+        }
+      }
+    },
+    "libraw_image_sizes_t": {
+      "cType": "libraw_image_sizes_t",
+      "fieldOrder": [
+        "raw_height",
+        "raw_width",
+        "height",
+        "width",
+        "top_margin",
+        "left_margin",
+        "iheight",
+        "iwidth",
+        "raw_pitch",
+        "pixel_aspect",
+        "flip",
+        "mask",
+        "raw_aspect",
+        "raw_inset_crops"
+      ],
+      "fields": {
+        "raw_height": {
+          "doc": "Full sensor height in raw pixels, before any cropping.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "raw_width": {
+          "doc": "Full sensor width in raw pixels, before any cropping.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "height": {
+          "doc": "Output image height in pixels, after LibRaw's standard crop.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "width": {
+          "doc": "Output image width in pixels, after LibRaw's standard crop.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "top_margin": {
+          "doc": "Rows skipped from the top of the raw sensor data to reach the cropped image.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "left_margin": {
+          "doc": "Columns skipped from the left of the raw sensor data to reach the cropped image.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "iheight": {
+          "doc": "Final output height after any half_size/other output-size-affecting params (equals height unless half_size etc. is used).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "iwidth": {
+          "doc": "Final output width after any half_size/other output-size-affecting params (equals width unless half_size etc. is used).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "raw_pitch": {
+          "doc": "Bytes per row of the raw (undecoded) sensor data.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "pixel_aspect": {
+          "doc": "Pixel aspect ratio (width:height of one sensor pixel); 1.0 for square pixels.",
+          "type": "double",
+          "cType": "double"
+        },
+        "flip": {
+          "doc": "Orientation from the file: 0 none, 3 180deg, 5 90deg CCW, 6 90deg CW (other LibRaw-internal values are possible for less common sensors). See the `sizes.oriented` convenience for swapped width/height at flip 5/6.",
+          "type": "int",
+          "cType": "int"
+        },
+        "mask": {
+          "doc": "Up to 8 masked/black-frame border rectangles (each [top, left, bottom, right] in raw pixel coordinates); unused entries are all-zero.",
+          "type": "matrix",
+          "cType": "int",
+          "cArrayDims": [
+            8,
+            4
+          ]
+        },
+        "raw_aspect": {
+          "doc": "Raw sensor aspect-ratio hint LibRaw derives for a few multi-aspect sensors (0 if not applicable).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "raw_inset_crops": {
+          "doc": "Up to 2 inset-crop rectangles some makers embed (e.g. an in-camera crop suggestion), as libraw_raw_inset_crop_t.",
+          "type": "struct",
+          "cType": "libraw_raw_inset_crop_t",
+          "cArrayDims": [
+            2
+          ]
+        }
+      }
+    },
+    "libraw_raw_inset_crop_t": {
+      "cType": "libraw_raw_inset_crop_t",
+      "fieldOrder": [
+        "cleft",
+        "ctop",
+        "cwidth",
+        "cheight"
+      ],
+      "fields": {
+        "cleft": {
+          "doc": "Inset crop left edge, in raw pixel coordinates.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "LibRaw leaves an unfilled entry at {cleft: 0xffff, ctop: 0xffff, cwidth: 0, cheight: 0} -- verified empirically (synthetic DNG, no inset-crop tags).",
+          "cType": "ushort"
+        },
+        "ctop": {
+          "doc": "Inset crop top edge, in raw pixel coordinates.",
+          "type": "uint",
+          "unset": 65535,
+          "cType": "ushort"
+        },
+        "cwidth": {
+          "doc": "Inset crop width, in raw pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "cheight": {
+          "doc": "Inset crop height, in raw pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        }
+      }
+    },
+    "libraw_imgother_t": {
+      "cType": "libraw_imgother_t",
+      "fieldOrder": [
+        "iso_speed",
+        "shutter",
+        "aperture",
+        "focal_len",
+        "timestamp",
+        "shot_order",
+        "gpsdata",
+        "parsed_gps",
+        "desc",
+        "artist",
+        "analogbalance"
+      ],
+      "fields": {
+        "iso_speed": {
+          "doc": "ISO speed rating as parsed from the file's EXIF/maker data.",
+          "type": "float",
+          "cType": "float"
+        },
+        "shutter": {
+          "doc": "Shutter speed (exposure time) in seconds.",
+          "type": "float",
+          "cType": "float"
+        },
+        "aperture": {
+          "doc": "Aperture (f-number).",
+          "type": "float",
+          "cType": "float"
+        },
+        "focal_len": {
+          "doc": "Focal length in millimeters.",
+          "type": "float",
+          "cType": "float"
+        },
+        "timestamp": {
+          "doc": "Capture time as a Unix epoch value in seconds, exactly as LibRaw's time_t reports it (not converted to a JS Date -- construct one with `new Date(other.timestamp * 1000)` if needed).",
+          "type": "time",
+          "cType": "time_t"
+        },
+        "shot_order": {
+          "doc": "Shot sequence number within a burst/multi-shot file, where the format records one.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "gpsdata": {
+          "doc": "Raw, undecoded GPS IFD tag words LibRaw captured while parsing.",
+          "type": "unsupported",
+          "notes": "Low-level parser intermediate; parsed_gps below is the decoded, useful form of the same data.",
+          "cType": "unsigned",
+          "cArrayDims": [
+            32
+          ]
+        },
+        "parsed_gps": {
+          "doc": "Decoded GPS data (latitude/longitude/altitude/timestamp and reference codes), as libraw_gps_info_t.",
+          "type": "struct",
+          "cType": "libraw_gps_info_t"
+        },
+        "desc": {
+          "doc": "Free-text image description embedded in the file, if any.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            512
+          ]
+        },
+        "artist": {
+          "doc": "Artist/photographer name embedded in the file, if any.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "analogbalance": {
+          "doc": "DNG AnalogBalance tag (per-channel R,G,B,G2 multipliers applied before the color matrix), when present.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            4
+          ]
+        }
+      }
+    },
+    "libraw_gps_info_t": {
+      "cType": "libraw_gps_info_t",
+      "fieldOrder": [
+        "latitude",
+        "longitude",
+        "gpstimestamp",
+        "altitude",
+        "altref",
+        "latref",
+        "longref",
+        "gpsstatus",
+        "gpsparsed"
+      ],
+      "fields": {
+        "latitude": {
+          "doc": "Latitude as [degrees, minutes, seconds].",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "longitude": {
+          "doc": "Longitude as [degrees, minutes, seconds].",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "gpstimestamp": {
+          "doc": "GPS timestamp (UTC) as [hours, minutes, seconds].",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "altitude": {
+          "doc": "Altitude in meters.",
+          "type": "float",
+          "cType": "float"
+        },
+        "altref": {
+          "doc": "Altitude reference: '0' above sea level, '1' below sea level (ASCII digit character, not a number).",
+          "type": "string",
+          "unset": 0,
+          "cType": "char"
+        },
+        "latref": {
+          "doc": "Latitude reference hemisphere: 'N' or 'S'.",
+          "type": "string",
+          "unset": 0,
+          "cType": "char"
+        },
+        "longref": {
+          "doc": "Longitude reference hemisphere: 'E' or 'W'.",
+          "type": "string",
+          "unset": 0,
+          "cType": "char"
+        },
+        "gpsstatus": {
+          "doc": "GPS receiver status code as recorded by the camera (maker-specific single character).",
+          "type": "string",
+          "unset": 0,
+          "cType": "char"
+        },
+        "gpsparsed": {
+          "doc": "Non-zero once LibRaw has successfully parsed GPS data for this file (0 if the file has no GPS data).",
+          "type": "uint",
+          "cType": "char"
+        }
+      }
+    },
+    "libraw_lensinfo_t": {
+      "cType": "libraw_lensinfo_t",
+      "fieldOrder": [
+        "MinFocal",
+        "MaxFocal",
+        "MaxAp4MinFocal",
+        "MaxAp4MaxFocal",
+        "EXIF_MaxAp",
+        "LensMake",
+        "Lens",
+        "LensSerial",
+        "InternalLensSerial",
+        "FocalLengthIn35mmFormat",
+        "nikon",
+        "dng",
+        "makernotes"
+      ],
+      "fields": {
+        "MinFocal": {
+          "doc": "Minimum focal length of the lens, in millimeters.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxFocal": {
+          "doc": "Maximum focal length of the lens, in millimeters.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4MinFocal": {
+          "doc": "Maximum aperture (f-number) at MinFocal.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4MaxFocal": {
+          "doc": "Maximum aperture (f-number) at MaxFocal.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "EXIF_MaxAp": {
+          "doc": "Maximum aperture as reported by the EXIF MaxApertureValue tag.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "LensMake": {
+          "doc": "Lens manufacturer, if recorded separately from the camera maker.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "Lens": {
+          "doc": "Lens model/name string, from whichever source (EXIF or maker-specific) LibRaw found first.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "LensSerial": {
+          "doc": "Lens serial number, if recorded.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "InternalLensSerial": {
+          "doc": "Lens's internal (maker-specific) serial number, if recorded.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "FocalLengthIn35mmFormat": {
+          "doc": "35mm-equivalent focal length in millimeters, from EXIF.",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "nikon": {
+          "doc": "Nikon-specific lens fields, as libraw_nikonlens_t (populated regardless of camera make in a few cross-compatible cases).",
+          "type": "struct",
+          "cType": "libraw_nikonlens_t"
+        },
+        "dng": {
+          "doc": "DNG lens-info tags, as libraw_dnglens_t.",
+          "type": "struct",
+          "cType": "libraw_dnglens_t"
+        },
+        "makernotes": {
+          "doc": "Vendor-agnostic lens-database fields LibRaw resolves from maker notes, as libraw_makernotes_lens_t.",
+          "type": "struct",
+          "cType": "libraw_makernotes_lens_t"
+        }
+      }
+    },
+    "libraw_nikonlens_t": {
+      "cType": "libraw_nikonlens_t",
+      "fieldOrder": [
+        "EffectiveMaxAp",
+        "LensIDNumber",
+        "LensFStops",
+        "MCUVersion",
+        "LensType"
+      ],
+      "fields": {
+        "EffectiveMaxAp": {
+          "doc": "Effective maximum aperture (f-number) as decoded from Nikon lens data.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "LensIDNumber": {
+          "doc": "Nikon lens ID byte (indexes Nikon's own lens database).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "uchar"
+        },
+        "LensFStops": {
+          "doc": "Number of f-stops in the lens's aperture range, Nikon encoding (1/12 EV units for some models -- see EXIF tools for the exact decode table).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "uchar"
+        },
+        "MCUVersion": {
+          "doc": "Lens MCU (electronic contacts) firmware version byte.",
+          "type": "uint",
+          "unset": 0,
+          "cType": "uchar"
+        },
+        "LensType": {
+          "doc": "Nikon lens type flags byte (AF/AF-D/G/VR/etc. bit flags).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "uchar"
+        }
+      }
+    },
+    "libraw_dnglens_t": {
+      "cType": "libraw_dnglens_t",
+      "fieldOrder": [
+        "MinFocal",
+        "MaxFocal",
+        "MaxAp4MinFocal",
+        "MaxAp4MaxFocal"
+      ],
+      "fields": {
+        "MinFocal": {
+          "doc": "Minimum focal length of the lens, in millimeters, from DNG tags.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxFocal": {
+          "doc": "Maximum focal length of the lens, in millimeters, from DNG tags.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4MinFocal": {
+          "doc": "Maximum aperture (f-number) at MinFocal, from DNG tags.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4MaxFocal": {
+          "doc": "Maximum aperture (f-number) at MaxFocal, from DNG tags.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        }
+      }
+    },
+    "libraw_makernotes_lens_t": {
+      "cType": "libraw_makernotes_lens_t",
+      "fieldOrder": [
+        "LensID",
+        "Lens",
+        "LensFormat",
+        "LensMount",
+        "CamID",
+        "CameraFormat",
+        "CameraMount",
+        "body",
+        "FocalType",
+        "LensFeatures_pre",
+        "LensFeatures_suf",
+        "MinFocal",
+        "MaxFocal",
+        "MaxAp4MinFocal",
+        "MaxAp4MaxFocal",
+        "MinAp4MinFocal",
+        "MinAp4MaxFocal",
+        "MaxAp",
+        "MinAp",
+        "CurFocal",
+        "CurAp",
+        "MaxAp4CurFocal",
+        "MinAp4CurFocal",
+        "MinFocusDistance",
+        "FocusRangeIndex",
+        "LensFStops",
+        "TeleconverterID",
+        "Teleconverter",
+        "AdapterID",
+        "Adapter",
+        "AttachmentID",
+        "Attachment",
+        "FocalUnits",
+        "FocalLengthIn35mmFormat"
+      ],
+      "fields": {
+        "LensID": {
+          "doc": "64-bit lens ID as decoded from maker notes (indexes LibRaw's lens database).",
+          "type": "uint",
+          "notes": "Read as a JS number (static_cast<double>); values above 2^53 would lose precision, though no lens ID LibRaw currently assigns is that large. LibRaw's own unset value for this field is UINT64_MAX (all bits set, verified empirically on the synthetic DNG), not 0 -- not usable as this generator's `unset` sentinel (it cannot round-trip through a JS Number/JSON literal and back into an exact 64-bit C++ comparison), so no `unset` is declared here; callers should treat an implausibly large LensID as \"no lens data\".",
+          "cType": "UINT64"
+        },
+        "Lens": {
+          "doc": "Lens name resolved from LibRaw's lens database using LensID.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "LensFormat": {
+          "doc": "Image-circle format the lens covers (LibRaw's internal lens-format enum value).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "LensMount": {
+          "doc": "Lens mount type ('male', the lens side; LibRaw's internal lens-mount enum value).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "CamID": {
+          "doc": "64-bit camera-body ID as decoded from maker notes (indexes LibRaw's camera database).",
+          "type": "uint",
+          "notes": "Same precision/unset note as LensID.",
+          "cType": "UINT64"
+        },
+        "CameraFormat": {
+          "doc": "Sensor format of the camera body (LibRaw's internal camera-format enum value).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "CameraMount": {
+          "doc": "Camera mount type ('female', the body side; LibRaw's internal camera-mount enum value).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "body": {
+          "doc": "Camera body name associated with CamID.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "FocalType": {
+          "doc": "Lens focal-length type: -1 unknown, 0 unknown, 1 fixed focal length, 2 zoom.",
+          "type": "int",
+          "cType": "short"
+        },
+        "LensFeatures_pre": {
+          "doc": "Lens name prefix features (e.g. mount/format markers) LibRaw splits out of the full lens name.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            16
+          ]
+        },
+        "LensFeatures_suf": {
+          "doc": "Lens name suffix features (e.g. stabilization/AF markers) LibRaw splits out of the full lens name.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            16
+          ]
+        },
+        "MinFocal": {
+          "doc": "Minimum focal length of the lens, in millimeters, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxFocal": {
+          "doc": "Maximum focal length of the lens, in millimeters, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4MinFocal": {
+          "doc": "Maximum aperture (f-number) at MinFocal, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4MaxFocal": {
+          "doc": "Maximum aperture (f-number) at MaxFocal, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MinAp4MinFocal": {
+          "doc": "Minimum aperture (f-number) at MinFocal, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MinAp4MaxFocal": {
+          "doc": "Minimum aperture (f-number) at MaxFocal, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp": {
+          "doc": "Maximum aperture (f-number) across the lens's zoom range.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MinAp": {
+          "doc": "Minimum aperture (f-number) across the lens's zoom range.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "CurFocal": {
+          "doc": "Focal length at time of shooting, in millimeters, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "CurAp": {
+          "doc": "Aperture (f-number) at time of shooting, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MaxAp4CurFocal": {
+          "doc": "Maximum aperture (f-number) available at CurFocal.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MinAp4CurFocal": {
+          "doc": "Minimum aperture (f-number) available at CurFocal.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "MinFocusDistance": {
+          "doc": "Minimum focus distance of the lens, in meters.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "FocusRangeIndex": {
+          "doc": "Lens focus-range index (maker-specific classification of the lens's focus range).",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "LensFStops": {
+          "doc": "Number of f-stops in the lens's aperture range, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        },
+        "TeleconverterID": {
+          "doc": "64-bit teleconverter ID, if a teleconverter was attached and recognized.",
+          "type": "uint",
+          "notes": "Same precision/unset note as LensID.",
+          "cType": "UINT64"
+        },
+        "Teleconverter": {
+          "doc": "Teleconverter name resolved from TeleconverterID.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "AdapterID": {
+          "doc": "64-bit lens-mount adapter ID, if an adapter was recognized.",
+          "type": "uint",
+          "notes": "Same precision/unset note as LensID.",
+          "cType": "UINT64"
+        },
+        "Adapter": {
+          "doc": "Adapter name resolved from AdapterID.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "AttachmentID": {
+          "doc": "64-bit attachment (e.g. close-up filter) ID, if recognized.",
+          "type": "uint",
+          "notes": "Same precision/unset note as LensID.",
+          "cType": "UINT64"
+        },
+        "Attachment": {
+          "doc": "Attachment name resolved from AttachmentID.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "FocalUnits": {
+          "doc": "Divisor to convert the lens database's internal focal-length units to millimeters (1 in the common case).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "ushort"
+        },
+        "FocalLengthIn35mmFormat": {
+          "doc": "35mm-equivalent focal length in millimeters, as resolved via the lens database.",
+          "type": "float",
+          "unset": 0,
+          "cType": "float"
+        }
+      }
+    },
+    "libraw_colordata_t": {
+      "cType": "libraw_colordata_t",
+      "fieldOrder": [
+        "curve",
+        "cblack",
+        "black",
+        "data_maximum",
+        "maximum",
+        "linear_max",
+        "fmaximum",
+        "fnorm",
+        "white",
+        "cam_mul",
+        "pre_mul",
+        "cmatrix",
+        "ccm",
+        "rgb_cam",
+        "cam_xyz",
+        "phase_one_data",
+        "flash_used",
+        "canon_ev",
+        "model2",
+        "UniqueCameraModel",
+        "LocalizedCameraModel",
+        "ImageUniqueID",
+        "RawDataUniqueID",
+        "OriginalRawFileName",
+        "profile",
+        "profile_length",
+        "black_stat",
+        "dng_color",
+        "dng_levels",
+        "WB_Coeffs",
+        "WBCT_Coeffs",
+        "as_shot_wb_applied",
+        "P1_color",
+        "raw_bps",
+        "ExifColorSpace"
+      ],
+      "fields": {
+        "curve": {
+          "doc": "Internal 65536-entry linearization/tone lookup table LibRaw builds during processing.",
+          "type": "unsupported",
+          "notes": "Only meaningful mid-decode (after unpack, before/around dcraw_process) and not part of the metadata this generator mirrors -- huge (65536 entries) and internal.",
+          "cType": "ushort",
+          "cArrayDims": [
+            65536
+          ]
+        },
+        "cblack": {
+          "doc": "Per-channel/per-pattern black level correction table (LIBRAW_CBLACK_SIZE entries; encodes both simple per-color-channel and complex per-line/per-pixel-pattern black levels depending on the camera).",
+          "type": "unsupported",
+          "notes": "4104-entry internal table (LIBRAW_CBLACK_SIZE); its first few entries are the common per-channel case, the rest a maker-specific pattern encoding not worth exposing raw. color.black/color.maximum below cover the common case.",
+          "cType": "unsigned",
+          "cArrayDims": [
+            4104
+          ]
+        },
+        "black": {
+          "doc": "Overall black level (baseline dark-current offset) applied during processing.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "data_maximum": {
+          "doc": "Maximum raw pixel value actually found in this file's data.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "maximum": {
+          "doc": "Maximum sensor value (saturation point) LibRaw uses for highlight handling.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "linear_max": {
+          "doc": "Per-channel linear maximum values (R,G,B,G2), used for highlight reconstruction on some formats.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "fmaximum": {
+          "doc": "Floating-point maximum sensor value, for floating-point RAW formats.",
+          "type": "float",
+          "cType": "float"
+        },
+        "fnorm": {
+          "doc": "Floating-point normalization factor, for floating-point RAW formats.",
+          "type": "float",
+          "cType": "float"
+        },
+        "white": {
+          "doc": "Per-corner (8x8 grid) white-level sample table some cameras embed for vignette/shading correction.",
+          "type": "unsupported",
+          "notes": "Internal shading-correction sample grid, not part of the requested color metadata surface.",
+          "cType": "ushort",
+          "cArrayDims": [
+            8,
+            8
+          ]
+        },
+        "cam_mul": {
+          "doc": "As-shot white balance multipliers (R, G1, B, G2), from the camera/file.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "pre_mul": {
+          "doc": "Pre-multipliers LibRaw computed for the sensor/file (used to build the final white balance when no as-shot data is available).",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "cmatrix": {
+          "doc": "3x4 color matrix (camera RGB -> a working color space) LibRaw computed for this file.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            4
+          ]
+        },
+        "ccm": {
+          "doc": "3x4 color correction matrix embedded in the file (e.g. DNG ColorMatrix), before LibRaw's own adjustments.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            4
+          ]
+        },
+        "rgb_cam": {
+          "doc": "3x4 matrix converting camera-native RGB to output RGB, as used by dcraw_process.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            4
+          ]
+        },
+        "cam_xyz": {
+          "doc": "4x3 matrix converting camera-native RGB to CIE XYZ.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            4,
+            3
+          ]
+        },
+        "phase_one_data": {
+          "doc": "Phase One-specific decoding parameters, as struct ph1_t (format, black-level geometry).",
+          "type": "struct",
+          "cType": "struct ph1_t"
+        },
+        "flash_used": {
+          "doc": "Flash compensation/power value as parsed from the file, when available.",
+          "type": "float",
+          "cType": "float"
+        },
+        "canon_ev": {
+          "doc": "Canon-specific exposure value adjustment parsed from maker notes.",
+          "type": "float",
+          "cType": "float"
+        },
+        "model2": {
+          "doc": "Secondary/internal model string some files embed (distinct from idata.model).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "UniqueCameraModel": {
+          "doc": "DNG UniqueCameraModel tag value.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "LocalizedCameraModel": {
+          "doc": "DNG LocalizedCameraModel tag value.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "ImageUniqueID": {
+          "doc": "DNG/EXIF ImageUniqueID tag value.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "RawDataUniqueID": {
+          "doc": "DNG RawDataUniqueID tag value (hex-encoded identifier).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            17
+          ]
+        },
+        "OriginalRawFileName": {
+          "doc": "DNG OriginalRawFileName tag value, for a DNG converted from another raw format.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "profile": {
+          "doc": "Embedded ICC color profile bytes, when the file carries one.",
+          "type": "bytes",
+          "notes": "void* pointer into LibRaw-owned memory, paired with profile_length below; scripts/gen-metadata-cc.js special-cases this field to copy profile_length bytes into a fresh Buffer when the pointer is non-null, and to omit the key entirely (never an empty Buffer) when it is null -- the one documented exception to \"pointer fields are unsupported\" (docs/plan/tasks.md's T14a Do list).",
+          "cType": "void*",
+          "pointerDepth": 1
+        },
+        "profile_length": {
+          "doc": "Length in bytes of the embedded ICC profile (0 if color.profile is absent).",
+          "type": "uint",
+          "unset": 0,
+          "cType": "unsigned"
+        },
+        "black_stat": {
+          "doc": "Internal black-level statistics accumulator (sum/count pairs) used while computing color.black.",
+          "type": "unsupported",
+          "notes": "Internal accumulator, not a documented public metadata field.",
+          "cType": "unsigned",
+          "cArrayDims": [
+            8
+          ]
+        },
+        "dng_color": {
+          "doc": "Up to 2 DNG color calibration sets (e.g. for two calibration illuminants), as libraw_dng_color_t.",
+          "type": "struct",
+          "cType": "libraw_dng_color_t",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "dng_levels": {
+          "doc": "DNG black/white level and crop metadata, as libraw_dng_levels_t.",
+          "type": "struct",
+          "cType": "libraw_dng_levels_t"
+        },
+        "WB_Coeffs": {
+          "doc": "Per-illuminant white balance coefficient presets (256 possible illuminant/CCT slots, [R, G1, B, G2] each) LibRaw parsed from the file's maker notes.",
+          "type": "matrix",
+          "notes": "Compacted: scripts/gen-metadata-cc.js emits only the illuminant slots that are actually set (any non-zero coefficient) as `[{ illuminant, coeffs: [r, g, b, g2] }]`, per docs/plan/tasks.md's T14a Do list, instead of the full fixed-size 256-entry table (almost entirely zero for any given file).",
+          "cType": "int",
+          "cArrayDims": [
+            256,
+            4
+          ]
+        },
+        "WBCT_Coeffs": {
+          "doc": "Per-color-temperature white balance coefficient presets (64 possible slots, [CCT, R, G1, B, G2] each) some makers embed.",
+          "type": "matrix",
+          "notes": "Compacted the same way as WB_Coeffs, keyed on CCT > 0 instead of illuminant index: `[{ colorTemperature, coeffs: [r, g, b, g2] }]`.",
+          "cType": "float",
+          "cArrayDims": [
+            64,
+            5
+          ]
+        },
+        "as_shot_wb_applied": {
+          "doc": "Non-zero if the as-shot white balance was already applied to the raw data by the camera/converter (rare; e.g. some compressed raw formats).",
+          "type": "uint",
+          "cType": "int"
+        },
+        "P1_color": {
+          "doc": "Up to 2 Phase One color calibration sets, as libraw_P1_color_t.",
+          "type": "struct",
+          "cType": "libraw_P1_color_t",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "raw_bps": {
+          "doc": "Bits per pixel/sample of the raw data (Phase One: raw format code instead -- see the header's field comment for the code table).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "ExifColorSpace": {
+          "doc": "EXIF ColorSpace tag value (e.g. 1 = sRGB, 0xffff = uncalibrated).",
+          "type": "int",
+          "cType": "int"
+        }
+      }
+    },
+    "struct ph1_t": {
+      "cType": "struct ph1_t",
+      "fieldOrder": [
+        "format",
+        "key_off",
+        "tag_21a",
+        "t_black",
+        "split_col",
+        "black_col",
+        "split_row",
+        "black_row",
+        "tag_210"
+      ],
+      "fields": {
+        "format": {
+          "doc": "Phase One raw format code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "key_off": {
+          "doc": "Phase One decryption key offset within the file.",
+          "type": "int",
+          "cType": "int"
+        },
+        "tag_21a": {
+          "doc": "Raw value of Phase One maker-note tag 0x21a (undocumented by Phase One; used internally by the decoder).",
+          "type": "int",
+          "cType": "int"
+        },
+        "t_black": {
+          "doc": "Phase One black-level tag value.",
+          "type": "int",
+          "cType": "int"
+        },
+        "split_col": {
+          "doc": "Column at which the sensor's dual-readout halves split, for split-sensor Phase One backs.",
+          "type": "int",
+          "cType": "int"
+        },
+        "black_col": {
+          "doc": "Column index of the black-reference columns.",
+          "type": "int",
+          "cType": "int"
+        },
+        "split_row": {
+          "doc": "Row at which the sensor's dual-readout halves split, for split-sensor Phase One backs.",
+          "type": "int",
+          "cType": "int"
+        },
+        "black_row": {
+          "doc": "Row index of the black-reference rows.",
+          "type": "int",
+          "cType": "int"
+        },
+        "tag_210": {
+          "doc": "Raw value of Phase One maker-note tag 0x210 (undocumented by Phase One; used internally by the decoder).",
+          "type": "float",
+          "cType": "float"
+        }
+      }
+    },
+    "libraw_dng_color_t": {
+      "cType": "libraw_dng_color_t",
+      "fieldOrder": [
+        "parsedfields",
+        "illuminant",
+        "calibration",
+        "colormatrix",
+        "forwardmatrix"
+      ],
+      "fields": {
+        "parsedfields": {
+          "doc": "Bitmask of which DNG color-calibration fields this set actually parsed from the file.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "illuminant": {
+          "doc": "DNG CalibrationIlluminant tag value (standard illuminant code) this calibration set applies to.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "calibration": {
+          "doc": "4x4 DNG CameraCalibration matrix.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            4,
+            4
+          ]
+        },
+        "colormatrix": {
+          "doc": "4x3 DNG ColorMatrix (camera RGB -> XYZ under the calibration illuminant).",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            4,
+            3
+          ]
+        },
+        "forwardmatrix": {
+          "doc": "3x4 DNG ForwardMatrix (XYZ -> camera RGB, the inverse-direction calibration some DNGs embed).",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            4
+          ]
+        }
+      }
+    },
+    "libraw_dng_levels_t": {
+      "cType": "libraw_dng_levels_t",
+      "fieldOrder": [
+        "parsedfields",
+        "dng_cblack",
+        "dng_black",
+        "dng_fcblack",
+        "dng_fblack",
+        "dng_whitelevel",
+        "default_crop",
+        "user_crop",
+        "preview_colorspace",
+        "analogbalance",
+        "asshotneutral",
+        "baseline_exposure",
+        "LinearResponseLimit",
+        "rawopcodes"
+      ],
+      "fields": {
+        "parsedfields": {
+          "doc": "Bitmask of which DNG level/crop fields this struct actually parsed from the file.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "dng_cblack": {
+          "doc": "DNG per-pattern black level table (LIBRAW_CBLACK_SIZE entries), the DNG-tag counterpart of color.cblack.",
+          "type": "unsupported",
+          "notes": "Same rationale as color.cblack above: a 4104-entry internal table.",
+          "cType": "unsigned",
+          "cArrayDims": [
+            4104
+          ]
+        },
+        "dng_black": {
+          "doc": "DNG BlackLevel tag value (single black level), when the file uses the simple (non-per-pattern) form.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "dng_fcblack": {
+          "doc": "Floating-point DNG per-pattern black level table (LIBRAW_CBLACK_SIZE entries), for floating-point DNGs.",
+          "type": "unsupported",
+          "notes": "Same rationale as dng_cblack above.",
+          "cType": "float",
+          "cArrayDims": [
+            4104
+          ]
+        },
+        "dng_fblack": {
+          "doc": "Floating-point DNG BlackLevel tag value, for floating-point DNGs.",
+          "type": "float",
+          "cType": "float"
+        },
+        "dng_whitelevel": {
+          "doc": "DNG WhiteLevel tag values, one per color plane.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "default_crop": {
+          "doc": "DNG DefaultCropOrigin + DefaultCropSize as [originX, originY, width, height].",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "user_crop": {
+          "doc": "DNG user-crop rectangle, relative to default_crop, as [top, left, bottom, right] fractions.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "preview_colorspace": {
+          "doc": "DNG PreviewColorSpace tag value.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "analogbalance": {
+          "doc": "DNG AnalogBalance tag (per-channel R,G,B,G2 multipliers), as parsed directly into this DNG-specific struct.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "asshotneutral": {
+          "doc": "DNG AsShotNeutral tag (per-channel neutral white balance values).",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "baseline_exposure": {
+          "doc": "DNG BaselineExposure tag value (EV adjustment recommended by the DNG author).",
+          "type": "float",
+          "cType": "float"
+        },
+        "LinearResponseLimit": {
+          "doc": "DNG LinearResponseLimit tag value (fraction of full scale where the sensor's response stops being linear).",
+          "type": "float",
+          "cType": "float"
+        },
+        "rawopcodes": {
+          "doc": "Up to 3 DNG opcode-list entries (OpcodeList1/2/3), as libraw_dng_rawopcode_t.",
+          "type": "struct",
+          "cType": "libraw_dng_rawopcode_t",
+          "cArrayDims": [
+            3
+          ]
+        }
+      }
+    },
+    "libraw_dng_rawopcode_t": {
+      "cType": "libraw_dng_rawopcode_t",
+      "fieldOrder": [
+        "len",
+        "data"
+      ],
+      "fields": {
+        "len": {
+          "doc": "Length in bytes of this DNG opcode-list entry's raw data.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "data": {
+          "doc": "Pointer to this DNG opcode-list entry's raw (undecoded) opcode data.",
+          "type": "unsupported",
+          "notes": "Raw void* into LibRaw-owned memory; DNG opcode lists are an advanced, format-specific feature out of scope for T14a's core mirror.",
+          "cType": "void*",
+          "pointerDepth": 1
+        }
+      }
+    },
+    "libraw_P1_color_t": {
+      "cType": "libraw_P1_color_t",
+      "fieldOrder": [
+        "romm_cam"
+      ],
+      "fields": {
+        "romm_cam": {
+          "doc": "3x3 ROMM (ProPhoto RGB reference space) to camera-RGB matrix, flattened row-major to 9 values, for Phase One files.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            9
+          ]
+        }
+      }
+    },
+    "libraw_metadata_common_t": {
+      "cType": "libraw_metadata_common_t",
+      "fieldOrder": [
+        "FlashEC",
+        "FlashGN",
+        "CameraTemperature",
+        "SensorTemperature",
+        "SensorTemperature2",
+        "LensTemperature",
+        "AmbientTemperature",
+        "BatteryTemperature",
+        "exifAmbientTemperature",
+        "exifHumidity",
+        "exifPressure",
+        "exifWaterDepth",
+        "exifAcceleration",
+        "exifCameraElevationAngle",
+        "real_ISO",
+        "exifExposureIndex",
+        "ColorSpace",
+        "firmware",
+        "ExposureCalibrationShift",
+        "afdata",
+        "afcount"
+      ],
+      "fields": {
+        "FlashEC": {
+          "doc": "Flash exposure compensation, in EV.",
+          "type": "float",
+          "cType": "float"
+        },
+        "FlashGN": {
+          "doc": "Flash guide number.",
+          "type": "float",
+          "cType": "float"
+        },
+        "CameraTemperature": {
+          "doc": "Camera body internal temperature in degrees Celsius, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "SensorTemperature": {
+          "doc": "Sensor temperature in degrees Celsius, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "SensorTemperature2": {
+          "doc": "Secondary sensor temperature reading in degrees Celsius, when the camera records more than one.",
+          "type": "float",
+          "cType": "float"
+        },
+        "LensTemperature": {
+          "doc": "Lens temperature in degrees Celsius, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "AmbientTemperature": {
+          "doc": "Ambient (environment) temperature in degrees Celsius, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "BatteryTemperature": {
+          "doc": "Battery temperature in degrees Celsius, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifAmbientTemperature": {
+          "doc": "Ambient temperature in degrees Celsius, from the EXIF/MakerNote ambient-temperature tag specifically.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifHumidity": {
+          "doc": "Relative humidity percentage, from EXIF, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifPressure": {
+          "doc": "Atmospheric pressure in hPa, from EXIF, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifWaterDepth": {
+          "doc": "Water depth in meters, from EXIF, for underwater housings that record it.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifAcceleration": {
+          "doc": "Acceleration magnitude, from EXIF, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifCameraElevationAngle": {
+          "doc": "Camera elevation angle in degrees, from EXIF, when recorded.",
+          "type": "float",
+          "cType": "float"
+        },
+        "real_ISO": {
+          "doc": "Measured (actual) ISO sensitivity, when the camera records one distinct from the nominal ISO in other.iso_speed.",
+          "type": "float",
+          "cType": "float"
+        },
+        "exifExposureIndex": {
+          "doc": "EXIF ExposureIndex tag value.",
+          "type": "float",
+          "cType": "float"
+        },
+        "ColorSpace": {
+          "doc": "EXIF/MakerNote color space code (maker-specific encoding; compare against the relevant vendor's documented values).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "firmware": {
+          "doc": "Camera firmware version string, when recorded outside idata.software.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            128
+          ]
+        },
+        "ExposureCalibrationShift": {
+          "doc": "Exposure calibration shift, in EV, some cameras record as a fine metering correction.",
+          "type": "float",
+          "cType": "float"
+        },
+        "afdata": {
+          "doc": "Autofocus-related maker-note data blocks actually present in this file (see afcount), as libraw_afinfo_item_t.",
+          "type": "struct",
+          "notes": "Fixed-size LIBRAW_AFDATA_MAXCOUNT (4) slots in the C struct; scripts/gen-metadata-cc.js emits only the first `afcount` entries (the rest are unused/zero slots).",
+          "cType": "libraw_afinfo_item_t",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "afcount": {
+          "doc": "Number of afdata entries actually populated (0..4).",
+          "type": "int",
+          "cType": "int"
+        }
+      }
+    },
+    "libraw_afinfo_item_t": {
+      "cType": "libraw_afinfo_item_t",
+      "fieldOrder": [
+        "AFInfoData_tag",
+        "AFInfoData_order",
+        "AFInfoData_version",
+        "AFInfoData_length",
+        "AFInfoData"
+      ],
+      "fields": {
+        "AFInfoData_tag": {
+          "doc": "Maker-note tag ID this autofocus data block was read from.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "AFInfoData_order": {
+          "doc": "Byte order (TIFF-style, e.g. 0x4949/0x4d4d) this autofocus data block was encoded with.",
+          "type": "int",
+          "cType": "short"
+        },
+        "AFInfoData_version": {
+          "doc": "Version number/tag of this autofocus data block's internal format.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "AFInfoData_length": {
+          "doc": "Length in bytes of this autofocus data block's raw payload.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "AFInfoData": {
+          "doc": "Pointer to this autofocus data block's raw (undecoded) payload bytes.",
+          "type": "unsupported",
+          "notes": "Raw uchar* into LibRaw-owned memory; decoding autofocus point layouts is maker-specific and out of scope for T14a's core mirror.",
+          "cType": "uchar*",
+          "pointerDepth": 1
+        }
+      }
+    }
+  }
+}

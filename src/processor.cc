@@ -4,6 +4,7 @@
 #include "cancel.h"
 #include "errors.h"
 #include "image_format.h"
+#include "metadata.h"
 
 #include <cstring>
 #include <string>
@@ -92,6 +93,9 @@ Napi::Function Processor::DefineClass(Napi::Env env) {
           InstanceMethod("getRawParams", &Processor::GetRawParams),
           // T10: internal-only, see processor.h's DrainEvents comment.
           InstanceMethod("_drainEvents", &Processor::DrainEvents),
+          // T14a: a getter (`processor.metadata`), not a method -- see
+          // processor.h's comment above Metadata's declaration.
+          InstanceAccessor("metadata", &Processor::Metadata, nullptr),
       });
 }
 
@@ -631,6 +635,14 @@ Napi::Value Processor::DecoderInfo(const Napi::CallbackInfo& info) {
                                                         : env.Null());
   result.Set("decoder_flags", Napi::Number::New(env, decoderInfo.decoder_flags));
   return result;
+}
+
+// T14a: getter (InstanceAccessor, see DefineClass above) -- no arguments,
+// `info` only carries `Env()`.
+Napi::Value Processor::Metadata(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  RequireOpened(env, "metadata");
+  return MetadataToObject(env, raw_->imgdata);
 }
 
 Napi::Value Processor::UnpackFunctionName(const Napi::CallbackInfo& info) {

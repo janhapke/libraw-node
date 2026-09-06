@@ -5,6 +5,7 @@
 #include "errors.h"
 #include "events.h"
 #include "image_format.h"
+#include "metadata.h"
 #include "params.h"
 
 #include <libraw/libraw.h>
@@ -332,31 +333,17 @@ class IdentifyWorker : public Napi::AsyncWorker {
 
     auto& d = raw_->imgdata;
 
-    Napi::Object sizes = Napi::Object::New(env);
-    sizes.Set("raw_width", d.sizes.raw_width);
-    sizes.Set("raw_height", d.sizes.raw_height);
-    sizes.Set("width", d.sizes.width);
-    sizes.Set("height", d.sizes.height);
-    sizes.Set("top_margin", d.sizes.top_margin);
-    sizes.Set("left_margin", d.sizes.left_margin);
-    sizes.Set("iwidth", d.sizes.iwidth);
-    sizes.Set("iheight", d.sizes.iheight);
-    sizes.Set("flip", d.sizes.flip);
-    sizes.Set("pixel_aspect", d.sizes.pixel_aspect);
-
-    Napi::Object idata = Napi::Object::New(env);
-    idata.Set("make", d.idata.make);
-    idata.Set("model", d.idata.model);
-    idata.Set("normalized_make", d.idata.normalized_make);
-    idata.Set("normalized_model", d.idata.normalized_model);
-    idata.Set("maker_index", d.idata.maker_index);
-    idata.Set("software", d.idata.software);
-    idata.Set("raw_count", d.idata.raw_count);
-    idata.Set("dng_version", d.idata.dng_version);
-    idata.Set("is_foveon", d.idata.is_foveon);
-    idata.Set("colors", d.idata.colors);
-    idata.Set("filters", static_cast<double>(d.idata.filters));
-    idata.Set("cdesc", d.idata.cdesc);
+    // T14a: the full metadata mirror (src/metadata.h/src/generated/
+    // metadata.gen.cc, generated from api/metadata.json) is now the single
+    // source for both the top-level `sizes`/`idata` shortcut fields this
+    // result has always carried (T08) and the `metadata` field itself --
+    // "source them from the same generated code to avoid drift" (docs/
+    // plan/tasks.md's T14a Do list). `sizes`/`idata` are therefore now the
+    // *full* per-field mirror (superset of T08's hand-picked subset above),
+    // including sizes.oriented.
+    Napi::Object metadata = MetadataToObject(env, d);
+    Napi::Object sizes = metadata.Get("sizes").As<Napi::Object>();
+    Napi::Object idata = metadata.Get("idata").As<Napi::Object>();
 
     Napi::Array thumbs = Napi::Array::New(env, static_cast<size_t>(d.thumbs_list.thumbcount));
     for (int i = 0; i < d.thumbs_list.thumbcount; i++) {
@@ -383,7 +370,7 @@ class IdentifyWorker : public Napi::AsyncWorker {
     result.Set("thumbs", thumbs);
     result.Set("decoder", decoder);
     result.Set("warnings", WarningsToArray(env, d.process_warnings));
-    result.Set("metadata", Napi::Object::New(env));  // T14 fills this in fully
+    result.Set("metadata", metadata);  // T14a: full mirror -- see the comment above.
     AttachEvents(env, result, cancelState_);
 
     raw_->recycle();

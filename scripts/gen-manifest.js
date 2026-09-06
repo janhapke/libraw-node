@@ -35,6 +35,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { extractStructBody, parseStructFields } = require('./lib/cstruct.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES_HEADER_PATH = path.join(ROOT, 'vendor/LibRaw/libraw/libraw_types.h');
@@ -73,68 +74,30 @@ function parseLibRawVersion(versionHeaderSrc) {
   };
 }
 
-// Extracts the `{ ... }` body of `typedef struct { ... } <cTypeName>;` (the
-// `}` and the name may or may not be separated by whitespace -- the vendored
-// header uses both styles across the two structs). Neither struct this
-// generator handles nests another struct or union, so a plain "last
-// `typedef struct` before the matching `} name ;`" search is sufficient; it
-// does not need to balance nested braces.
-function extractStructBody(headerSrc, cTypeName) {
-  const endMarker = new RegExp(`\\}\\s*${cTypeName}\\s*;`);
-  const endMatch = headerSrc.match(endMarker);
-  if (!endMatch) {
-    throw new Error(`struct ${cTypeName} not found in ${TYPES_HEADER_PATH}`);
-  }
-  const endIdx = endMatch.index;
-  const beforeEnd = headerSrc.slice(0, endIdx);
-  const typedefIdx = beforeEnd.lastIndexOf('typedef struct');
-  if (typedefIdx === -1) {
-    throw new Error(`"typedef struct" preceding ${cTypeName} not found in ${TYPES_HEADER_PATH}`);
-  }
-  const braceIdx = headerSrc.indexOf('{', typedefIdx);
-  if (braceIdx === -1 || braceIdx > endIdx) {
-    throw new Error(`opening brace for ${cTypeName} not found in ${TYPES_HEADER_PATH}`);
-  }
-  return headerSrc.slice(braceIdx + 1, endIdx);
-}
-
-// Matches one field declaration with comments already stripped, e.g.:
-//   "unsigned greybox[4]"     -> type "unsigned", stars "",   name "greybox",     len "4"
-//   "char *output_profile"    -> type "char",      stars "*", name "output_profile"
-//   "char **custom_camera_strings" -> type "char",  stars "**", name "custom_camera_strings"
-//   "char p4shot_order[5]"    -> type "char",      stars "",  name "p4shot_order", len "5"
-//   "float exp_shift"         -> type "float",     stars "",  name "exp_shift"
-const FIELD_RE = /^([A-Za-z_][\w\s]*?)([*]*)\s*([A-Za-z_]\w*)\s*(?:\[\s*(\d+)\s*\])?$/;
-
-function parseStructFields(body, cTypeName) {
-  // Strip block comments (dcraw-flag annotations like "/* -A x1 y1 x2 y2 */")
-  // before splitting into statements -- same technique as gen-progress.js,
-  // for the same reason: a comment between two fields must not get glued
-  // onto the following declaration.
-  const stripped = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  const fields = [];
-  for (const rawStmt of stripped.split(';')) {
-    const stmt = rawStmt.replace(/\s+/g, ' ').trim();
-    if (!stmt) continue;
-    const m = stmt.match(FIELD_RE);
-    if (!m) {
-      throw new Error(`gen-manifest: could not parse field declaration in ${cTypeName}: ${JSON.stringify(stmt)}`);
+// T14a: the field parser itself (struct-body extraction, declaration
+// tokenizing) moved to scripts/lib/cstruct.js, generalized to also handle
+// scripts/gen-metadata.js's nested/2-D/typedef'd-struct needs. This file now
+// only adapts cstruct's field shape ({ name, baseType, pointerDepth,
+// arrayDims, cType }) to the flat { name, cType, pointerDepth, arrayLength }
+// shape api/params.json has always used -- neither libraw_output_params_t
+// nor libraw_raw_unpack_params_t declares a 2-D array or a comma-separated
+// multi-name declarator sharing an array suffix, so `arrayDims` never has
+// more than one entry here (asserted below, not just assumed).
+function parseParamsStructFields(headerSrc, cTypeName) {
+  const body = extractStructBody(headerSrc, cTypeName, TYPES_HEADER_PATH);
+  const rawFields = parseStructFields(body, cTypeName);
+  return rawFields.map((f) => {
+    if (f.arrayDims.length > 1) {
+      throw new Error(`gen-manifest: ${cTypeName}.${f.name} has a ${f.arrayDims.length}-D array; ` +
+        'params/rawparams are not expected to declare one -- update this adapter if that changes.');
     }
-    const [, rawType, stars, name, arrayLenStr] = m;
-    const baseType = rawType.trim();
-    const pointerDepth = stars.length;
-    const arrayLength = arrayLenStr ? Number(arrayLenStr) : null;
-    fields.push({
-      name,
-      cType: baseType + stars,
-      pointerDepth,
-      arrayLength,
-    });
-  }
-  if (fields.length === 0) {
-    throw new Error(`gen-manifest: parsed zero fields out of ${cTypeName}`);
-  }
-  return fields;
+    return {
+      name: f.name,
+      cType: f.cType,
+      pointerDepth: f.pointerDepth,
+      arrayLength: f.arrayDims.length === 1 ? f.arrayDims[0] : null,
+    };
+  });
 }
 
 function loadAnnotations() {
@@ -168,8 +131,7 @@ function buildManifest() {
 
   for (const structDef of STRUCTS) {
     const { annotationKey, cTypeName, imgdataPath } = structDef;
-    const body = extractStructBody(headerSrc, cTypeName);
-    const headerFields = parseStructFields(body, cTypeName);
+    const headerFields = parseParamsStructFields(headerSrc, cTypeName);
     const headerFieldNames = new Set(headerFields.map((f) => f.name));
 
     const structAnnotations = annotations[annotationKey];

@@ -99,3 +99,49 @@ the manifest; CI fails on new or removed fields until the manifest is updated. T
 > and every other `flags`-typed field, but not for a package-wide `warnings: string[]` derived from
 > `process_warnings` (still hand-written in `src/fused.cc`, per T08's own note there) or for exporting the
 > flag/enum tables standalone.
+
+> **Correction (T14a):** §3's "manifest of `imgdata.idata/sizes/other/lens/color/gps`" is `api/metadata.json`
+> (`scripts/gen-metadata.js`), keyed by `groups.{idata,sizes,other,lens,color,"makernotes.common"}` (imgdata
+> path + C type) and `structs.<cTypeName>` (one entry per struct type actually reached, top-level or
+> nested -- there is no separate top-level `gps` group; GPS is `other.parsed_gps`, a nested
+> `libraw_gps_info_t`). Per-vendor `makernotes.*` (canon/nikon/sony/...) are T14b, not this generator --
+> only `makernotes.common` (temperature/flash/AF-data fields common to every vendor) is in scope here, so
+> "a curated set of makernotes.* fields" did not need curating for T14a itself. The struct-field parser
+> (extraction + tokenizing) that used to live inline in `gen-manifest.js` was generalized into
+> `scripts/lib/cstruct.js` (nested/typedef'd struct types, 2-D arrays, comma-separated declarator lists,
+> macro-resolved array lengths) so both generators share it, per this task's own instruction.
+>
+> `api/metadata.annotations.json` is keyed by exact C struct-type reference string (e.g.
+> `"libraw_gps_info_t"`, `"struct ph1_t"` for the one struct LibRaw declares without a typedef), not by
+> imgdata path, so a struct type reached from more than one field is annotated once. The per-field `type`
+> values actually used are `int|uint|float|double|string|bytes|int[]|float[]|matrix|struct|time|unsupported`
+> (`matrix` covers both numeric 2-D arrays like `cmatrix`/`rgb_cam` and the CFA pattern arrays `xtrans`/
+> `xtrans_abs`, which are `char[6][6]` but numeric-valued, not text). "Char arrays as trimmed strings" holds
+> for `char[N]` fields annotated `string` (NUL-trimmed via `strnlen`, and omitted entirely -- not an empty
+> string -- when the trimmed result is empty); the four single-`char` (non-array) GPS reference-code fields
+> (`altref`/`latref`/`longref`/`gpsstatus`) are also `string`-typed but become a 1-character string, guarded
+> by the same `unset` mechanism as numeric fields. "Omit fields at their unset sentinel" is implemented as a
+> per-field `unset` value in the annotation (not a fixed set of `{0, -1, 0xffff}` tried automatically) --
+> T14a discovered empirically that `libraw_raw_inset_crop_t`'s `cleft`/`ctop` use `0xffff` (65535) but that
+> the UINT64 lens/camera/teleconverter/adapter/attachment ID fields in `libraw_makernotes_lens_t` do *not*
+> use `0` (their real unset value is `UINT64_MAX`, confirmed against the synthetic fixture), so those five
+> fields carry no `unset` annotation at all rather than a wrong one -- a value that large cannot round-trip
+> exactly through a JS Number/JSON literal and back into an exact 64-bit C++ comparison anyway.
+>
+> Pointer fields are `unsupported` except `color.profile` (paired with `color.profile_length`, becomes a
+> `Buffer` when non-null) -- exactly the one documented exception in `docs/plan/tasks.md`'s T14a Do list.
+> Two more LibRaw-specific special cases exist beyond the generic per-`type` rules: `color.WB_Coeffs`/
+> `WBCT_Coeffs` are compacted to only their set illuminant/color-temperature entries (each a
+> 256- or 64-slot fixed table, almost entirely zero for any one file), and `makernotes.common.afdata` emits
+> only its first `afcount` of the fixed `LIBRAW_AFDATA_MAXCOUNT` (4) slots. `sizes.oriented` (`{ width,
+> height }`, swapped when `imgdata.sizes.flip` is 5 or 6) is added by hand in the generated
+> `MetadataToObject`, not derived from a manifest field.
+>
+> `src/generated/metadata.gen.cc` (`scripts/gen-metadata-cc.js`) declares one `ToObject_<Type>` function per
+> struct type (mirroring `gen-params-cc.js`'s straight-line-per-field generation strategy) and is declared by
+> a small hand-written `src/metadata.h` (one function, `MetadataToObject(Napi::Env, const libraw_data_t&)`).
+> `identify()`'s top-level `sizes`/`idata` shortcut fields (T08) are now sourced from the same
+> `MetadataToObject` call as the `metadata` field itself, rather than hand-assembled from a hand-picked
+> subset -- they are therefore now the full per-field mirror, not the smaller T08 subset. `Processor.metadata`
+> is a getter (`InstanceAccessor`, read as `processor.metadata`, not called as a function), throwing
+> `LIBRAW_OUT_OF_ORDER_CALL` before the Processor is opened.

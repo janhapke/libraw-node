@@ -33,7 +33,15 @@ describe('identify() — synthetic PM5544 DNG', () => {
 
         expect(info.decoder).toBeTypeOf('object');
         expect(Array.isArray(info.warnings)).toBe(true);
-        expect(info.metadata).toEqual({});
+
+        // T14a: metadata is now the full mirror (idata/sizes/other/lens/
+        // color/makernotes.common), no longer the T08 placeholder `{}`. See
+        // test/metadata.test.ts for the dedicated coverage; this is just a
+        // smoke check that identify() actually wires it through.
+        expect(info.metadata.idata.make).toBe(info.idata.make);
+        expect(info.metadata.sizes.width).toBe(768);
+        expect(info.metadata.sizes.oriented).toEqual({ width: 768, height: 576 });
+        expect(info.metadata.color.cam_mul).toBeDefined();
     });
 });
 
