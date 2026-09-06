@@ -161,3 +161,109 @@ describe.skipIf(!realTestImagesDir)('metadata — real camera files (LIBRAW_TEST
         }
     });
 });
+
+// T14b: per-vendor makernotes (metadata.makernotes.{canon,nikon,sony,fuji,
+// olympus,panasonic,pentax,samsung,kodak,p1,hasselblad,ricoh}).
+const T14B_VENDOR_KEYS = [
+    'canon', 'nikon', 'sony', 'fuji', 'olympus', 'panasonic',
+    'pentax', 'samsung', 'kodak', 'p1', 'hasselblad', 'ricoh',
+] as const;
+
+describe.skipIf(!realTestImagesDir)('metadata.makernotes — per-vendor (T14b, LIBRAW_TEST_IMAGES)', () => {
+    it('DSC_4985.NEF: makernotes.nikon has at least three defined numeric fields', async () => {
+        const buf = readFileSync(realImagePath('DSC_4985.NEF'));
+        const info = await libraw.identify(buf);
+        const nikon = info.metadata.makernotes.nikon;
+        expect(nikon).toBeTypeOf('object');
+
+        const numericFieldNames = Object.entries(nikon)
+            .filter(([, v]) => typeof v === 'number')
+            .map(([k]) => k);
+        // eslint-disable-next-line no-console
+        console.log(`DSC_4985.NEF makernotes.nikon defined numeric fields (${numericFieldNames.length}):`, numericFieldNames.join(', '));
+        expect(numericFieldNames.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('P3210620.ORF: makernotes.olympus is present, with several defined fields (printed)', async () => {
+        const buf = readFileSync(realImagePath('P3210620.ORF'));
+        const info = await libraw.identify(buf);
+        const olympus = info.metadata.makernotes.olympus;
+        expect(olympus).toBeTypeOf('object');
+
+        const definedEntries = Object.entries(olympus).filter(([, v]) => v !== undefined);
+        // eslint-disable-next-line no-console
+        console.log(
+            'P3210620.ORF makernotes.olympus defined fields (sample):',
+            definedEntries.slice(0, 8).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '),
+        );
+        expect(definedEntries.length).toBeGreaterThan(0);
+        // A camera-model-derived string field should be present and non-empty.
+        expect(typeof olympus.CameraType2).toBe('string');
+        expect((olympus.CameraType2 as string).length).toBeGreaterThan(0);
+    });
+
+    it('IMGP5127.DNG: makernotes.pentax object exists (a DNG may carry few Pentax-specific fields)', async () => {
+        const buf = readFileSync(realImagePath('IMGP5127.DNG'));
+        const info = await libraw.identify(buf);
+        const pentax = info.metadata.makernotes.pentax;
+        expect(pentax).toBeTypeOf('object');
+
+        const definedEntries = Object.entries(pentax).filter(([, v]) => v !== undefined);
+        // eslint-disable-next-line no-console
+        console.log(
+            'IMGP5127.DNG makernotes.pentax defined fields:',
+            definedEntries.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '),
+        );
+        // No minimum count asserted (per the task's own "a DNG may carry
+        // few" caveat) -- only that the object itself is exposed.
+    });
+
+    // Rule (documented in docs/how-to/expose-libraw-options.md's T14b
+    // correction block): imgdata.makernotes is a plain struct-of-structs,
+    // not a tagged union -- LibRaw gives this generator no reliable signal
+    // to omit a whole vendor sub-object for a file made by a different
+    // vendor, so all twelve makernotes.* keys are always present as objects
+    // on every file (never omitted), matching the T14a precedent for
+    // lens.nikon/lens.dng/lens.makernotes/color.phase_one_data.
+    it('all twelve makernotes.* vendor keys are always present objects, never omitted, on every real file', async () => {
+        for (const name of ['IMGP5127.DNG', 'DSC_4985.NEF', 'P3210619.ORF', 'P3210620.ORF']) {
+            const buf = readFileSync(realImagePath(name));
+            const info = await libraw.identify(buf);
+            const { makernotes } = info.metadata;
+            for (const vendor of T14B_VENDOR_KEYS) {
+                expect(makernotes[vendor], `${name}: makernotes.${vendor}`).toBeTypeOf('object');
+                expect(makernotes[vendor], `${name}: makernotes.${vendor}`).not.toBeUndefined();
+            }
+        }
+    });
+
+    // "No key in any vendor object holds a sentinel value": check the
+    // documented-sentinel fields specifically (the only ones this generator
+    // omits at all -- see the T14b correction block) across every real file,
+    // including files for a *different* vendor than the one that documents
+    // the sentinel.
+    it('no documented-sentinel field ever surfaces its sentinel value', async () => {
+        const SENTINEL_CHECKS: Array<{ vendor: (typeof T14B_VENDOR_KEYS)[number]; field: string; sentinel: number }> = [
+            { vendor: 'sony', field: 'CameraType', sentinel: 0xffff },
+            { vendor: 'sony', field: 'AFAreaModeSetting', sentinel: 0xff },
+            { vendor: 'sony', field: 'AFMicroAdjOn', sentinel: -1 },
+            { vendor: 'sony', field: 'AFMicroAdjValue', sentinel: 0x7f },
+            { vendor: 'sony', field: 'LongExposureNoiseReduction', sentinel: 0xffffffff },
+            { vendor: 'sony', field: 'Quality', sentinel: 0xffffffff },
+            { vendor: 'fuji', field: 'RAFDataGeneration', sentinel: 0 },
+            { vendor: 'canon', field: 'Quality', sentinel: -1 },
+        ];
+
+        for (const name of ['IMGP5127.DNG', 'DSC_4985.NEF', 'P3210619.ORF', 'P3210620.ORF']) {
+            const buf = readFileSync(realImagePath(name));
+            const info = await libraw.identify(buf);
+            const { makernotes } = info.metadata;
+            for (const { vendor, field, sentinel } of SENTINEL_CHECKS) {
+                const value = (makernotes[vendor] as Record<string, unknown>)[field];
+                if (value !== undefined) {
+                    expect(value, `${name}: makernotes.${vendor}.${field}`).not.toBe(sentinel);
+                }
+            }
+        }
+    });
+});

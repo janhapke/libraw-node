@@ -7,7 +7,8 @@
 // hand-maintained.
 //
 // One `ToObject_<Type>` free function is emitted per struct type the
-// manifest covers (six top-level groups plus every nested struct type
+// manifest covers (eighteen top-level groups -- six T14a core groups plus
+// twelve T14b per-vendor makernotes groups -- plus every nested struct type
 // reached from their fields -- see gen-metadata.js's header comment), each
 // building a read-only Napi::Object field by field from api/metadata.json's
 // per-field `type`:
@@ -46,28 +47,40 @@
 //   struct, no cArrayDims  -> ToObject_<the field's own cType>(env, value).
 //   struct, cArrayDims.length === 1
 //                          -> Napi::Array of the above, one per element.
+//   bytes, cArrayDims.length === 1 (uchar[N], T14b)
+//                          -> a fixed-size Buffer copy of the N raw bytes,
+//                              always emitted (no `unset` guard -- arrays
+//                              never get one, see below).
 //   unsupported             -> omitted from the generated object entirely.
 // A field with an `unset` sentinel in the manifest gets its Set() call
 // wrapped in `if (rawValue != unset)`, so an unfilled field becomes a
-// missing key (`undefined` on the JS side) instead of the sentinel value.
+// missing key (`undefined` on the JS side) instead of the sentinel value --
+// this applies only to the scalar int/uint/float/double/time/string-scalar-
+// char cases (withUnsetGuard); no array/matrix/struct-typed field ever gets
+// one, so such a field's LibRaw-level zero/sentinel value (if any) is always
+// visible in the emitted array/Buffer/nested object.
 //
-// Three fields need LibRaw-specific handling the generic `type`-driven
-// rules above cannot express, special-cased by (struct type, field name):
+// A few fields need LibRaw-specific handling the generic `type`-driven rules
+// above cannot express, special-cased by (struct type, field name):
 //   - libraw_colordata_t.profile: paired with profile_length, becomes a
 //     fresh Buffer copy of the ICC profile bytes when non-null (the one
 //     documented exception to "pointer fields are unsupported" -- see
 //     docs/plan/tasks.md's T14a Do list and this field's annotation notes).
+//     Distinct from the generic `bytes` case above: this one is a pointer
+//     paired with a separate length field and omitted when null, not a
+//     fixed-size array copied unconditionally.
 //   - libraw_colordata_t.WB_Coeffs / WBCT_Coeffs: compacted to an array of
 //     only the set illuminant/color-temperature entries instead of the
 //     full fixed-size (256- / 64-entry) table.
 //   - libraw_metadata_common_t.afdata: only the first `afcount` of the
 //     fixed LIBRAW_AFDATA_MAXCOUNT (4) slots are emitted.
 //
-// MetadataToObject itself (not per-field generated, just six ToObject_*
-// calls assembled into `{ idata, sizes, other, lens, color, makernotes:
-// { common } }`) also adds `sizes.oriented` -- `{ width, height }` with the
-// two swapped when imgdata.sizes.flip is 5 or 6, per the T14a acceptance
-// criterion.
+// MetadataToObject itself (not per-field generated, just the eighteen
+// ToObject_* calls assembled into `{ idata, sizes, other, lens, color,
+// makernotes: { common, canon, nikon, sony, fuji, olympus, panasonic,
+// pentax, samsung, kodak, p1, hasselblad, ricoh } }`) also adds
+// `sizes.oriented` -- `{ width, height }` with the two swapped when
+// imgdata.sizes.flip is 5 or 6, per the T14a acceptance criterion.
 //
 // Usage:
 //   node scripts/gen-metadata-cc.js          regenerate src/generated/metadata.gen.cc
@@ -238,8 +251,25 @@ function genField(structKey, structVar, name, field) {
       return withUnsetGuard(field, access, setStatement);
     }
 
-    case 'bytes':
-      throw new Error(`gen-metadata-cc: field ${structKey}.${name} is "bytes" but has no special-case handler`);
+    case 'bytes': {
+      // Generic case (T14b): a fixed-size `uchar[N]` array with no text or
+      // per-element-numeric meaning documented (e.g. Nikon's flash/VR status
+      // byte records, Pentax's DriveMode/DynamicRangeExpansion) becomes a
+      // fresh, always-emitted Buffer copy of the N raw bytes. This is
+      // distinct from color.profile's "bytes" handling above (T14a's one
+      // `bytes` field, a pointer paired with a separate length field and
+      // omitted when null) -- that one is special-cased by struct+field name
+      // instead of going through this generic, array-length-driven path.
+      if (arrayDims.length !== 1) {
+        throw new Error(`gen-metadata-cc: field ${structKey}.${name} is "bytes" with unsupported array shape [${arrayDims.join(',')}] (expected a single fixed dimension)`);
+      }
+      const len = arrayDims[0];
+      return `  {
+    Napi::Buffer<uint8_t> buf = Napi::Buffer<uint8_t>::New(env, ${len});
+    std::memcpy(buf.Data(), ${access}, ${len});
+    obj.Set(${key}, buf);
+  }`;
+    }
 
     case 'int[]':
     case 'float[]': {
@@ -362,6 +392,20 @@ function renderCc(manifest) {
     '',
     '  Napi::Object makernotesObj = Napi::Object::New(env);',
     `  makernotesObj.Set("common", ${cxxFnName(groups['makernotes.common'].cType)}(env, d.makernotes.common));`,
+    `  makernotesObj.Set("canon", ${cxxFnName(groups['makernotes.canon'].cType)}(env, d.makernotes.canon));`,
+    `  makernotesObj.Set("nikon", ${cxxFnName(groups['makernotes.nikon'].cType)}(env, d.makernotes.nikon));`,
+    `  makernotesObj.Set("sony", ${cxxFnName(groups['makernotes.sony'].cType)}(env, d.makernotes.sony));`,
+    `  makernotesObj.Set("fuji", ${cxxFnName(groups['makernotes.fuji'].cType)}(env, d.makernotes.fuji));`,
+    `  makernotesObj.Set("olympus", ${cxxFnName(groups['makernotes.olympus'].cType)}(env, d.makernotes.olympus));`,
+    `  makernotesObj.Set("panasonic", ${cxxFnName(groups['makernotes.panasonic'].cType)}(env, d.makernotes.panasonic));`,
+    `  makernotesObj.Set("pentax", ${cxxFnName(groups['makernotes.pentax'].cType)}(env, d.makernotes.pentax));`,
+    `  makernotesObj.Set("samsung", ${cxxFnName(groups['makernotes.samsung'].cType)}(env, d.makernotes.samsung));`,
+    `  makernotesObj.Set("kodak", ${cxxFnName(groups['makernotes.kodak'].cType)}(env, d.makernotes.kodak));`,
+    // JS-facing key is "p1"; LibRaw's own imgdata.makernotes field name for
+    // this vendor is "phaseone" (see gen-metadata.js's GROUPS comment).
+    `  makernotesObj.Set("p1", ${cxxFnName(groups['makernotes.p1'].cType)}(env, d.makernotes.phaseone));`,
+    `  makernotesObj.Set("hasselblad", ${cxxFnName(groups['makernotes.hasselblad'].cType)}(env, d.makernotes.hasselblad));`,
+    `  makernotesObj.Set("ricoh", ${cxxFnName(groups['makernotes.ricoh'].cType)}(env, d.makernotes.ricoh));`,
     '  obj.Set("makernotes", makernotesObj);',
     '',
     '  return obj;',

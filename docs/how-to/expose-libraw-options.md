@@ -156,3 +156,72 @@ the manifest; CI fails on new or removed fields until the manifest is updated. T
 > subset -- they are therefore now the full per-field mirror, not the smaller T08 subset. `Processor.metadata`
 > is a getter (`InstanceAccessor`, read as `processor.metadata`, not called as a function), throwing
 > `LIBRAW_OUT_OF_ORDER_CALL` before the Processor is opened.
+
+> **Correction (T14b):** all twelve per-vendor `makernotes.*` groups T14a deferred landed in one session --
+> `makernotes.{canon,nikon,sony,fuji,olympus,panasonic,pentax,samsung,kodak,p1,hasselblad,ricoh}` --
+> 340 fields total (`libraw_canon_makernotes_t` 41, `libraw_nikon_makernotes_t` 58, `libraw_sony_info_t` 57,
+> `libraw_fuji_info_t` 41, `libraw_olympus_makernotes_t` 39, `libraw_panasonic_makernotes_t` 10,
+> `libraw_pentax_makernotes_t` 12, `libraw_samsung_makernotes_t` 7, `libraw_kodak_makernotes_t` 18,
+> `libraw_p1_makernotes_t` 4, `libraw_hasselblad_makernotes_t` 15, `libraw_ricoh_makernotes_t` 16), plus two
+> newly-reached nested struct types (`libraw_area_t`, Canon's crop/black-area rectangles; and
+> `libraw_sensor_highspeed_crop_t`, Nikon's high-speed-crop rectangle). `scripts/gen-metadata.js`'s `GROUPS`
+> list gained twelve entries the same way `makernotes.common` was added in T14a; the one naming wrinkle is
+> `makernotes.p1`, whose `imgdataPath` is `imgdata.makernotes.phaseone` -- LibRaw's own C field name for this
+> vendor is `phaseone`, not `p1` (`docs/plan/tasks.md`'s T14b list uses the JS-facing name `p1`, so the group
+> key and the emitted JS key are both `p1` while the C struct access stays `d.makernotes.phaseone`).
+>
+> `scripts/lib/cstruct.js` needed one small grammar extension: `libraw_fuji_info_t` declares five `char[]`
+> fields with a `+1` NUL-terminator idiom (`char FujiModel[32 + 1]`), which the previous single-numeric-
+> literal-or-macro array-length parser rejected. The fix is a '+'-separated sum of literals/macros as a
+> dimension (no other arithmetic operator appears in any LibRaw array length) -- see the parser's own updated
+> header comment. No other new parser feature was needed: every vendor struct's fields (fixed 1-D/2-D arrays,
+> `short`/`ushort`/`uchar`/`uint8_t`/`uint16_t`/`int8_t`/`INT64`-family scalars and arrays, nested typedef'd
+> struct fields, comma-separated declarator lists, one raw pointer field) already fit the grammar T11/T14a
+> built.
+>
+> Two representation rules needed picking that T14a's six core groups never exercised:
+> - **`bytes` fields with no per-field special case.** T14a's only `bytes` field (`color.profile`) is a
+>   pointer paired with a length, hand-special-cased in `gen-metadata-cc.js`. T14b's `bytes` fields are plain
+>   fixed-size `uchar[N]` byte/flag records with no documented text or per-element-numeric meaning (Nikon's
+>   flash/VR status bytes, Pentax's `DriveMode`/`DynamicRangeExpansion`) -- `gen-metadata-cc.js` gained a
+>   *generic* `bytes` case (any `type: "bytes"` field with a single fixed array dimension becomes a fresh,
+>   always-emitted `Buffer` copy of the `N` raw bytes), rather than adding eight more per-field special cases.
+>   The dividing line applied throughout `api/metadata.annotations.json`: a `uchar[N]` array is `bytes`; a
+>   `uint8_t[N]`/`int8_t` field is treated as ordinary numeric data (`int`/`int[]`), since LibRaw's own header
+>   reserves the fixed-width spelling for fields with individually meaningful values (e.g. Sony's
+>   `AFPointsUsed`, a list of AF point indices) even though both compile to the same one-byte C type.
+> - **The `unset` sentinel, for structs LibRaw zero-initializes wholesale.** `vendor/LibRaw/src/utils/
+>   init_close_utils.cpp` shows the entire per-vendor makernotes block is `ZERO(MN)`-ed before every file is
+>   parsed (both in the constructor and in `recycle()`), so every scalar field's true C-level default is `0`
+>   -- but adding `unset: 0` to all ~300 scalar fields on that basis alone would also suppress genuinely-zero
+>   *decoded* values for fields where `0` is a normal reading (flash-off, a real black level of 0, "no
+>   compensation applied", ...), which T14a's own precedent avoids (`makernotes.common.ColorSpace`,
+>   `other.shot_order` and others carry no `unset` despite defaulting to 0 too). T14b keeps that conservative
+>   T14a convention: `unset` is added only where `libraw_types.h` itself documents a specific sentinel in a
+>   field comment -- about twenty Sony fields with an explicit `// init in 0xffff`/`0xff`/`-1`/`0x7f` comment
+>   (`CameraType`, `AFAreaModeSetting`, `AFMicroAdjOn`, `LongExposureNoiseReduction`, ...), plus
+>   `Sony0x9400_version` ("0 if not found/deciphered"), `prd_BayerPattern` ("0 -> not valid"), Fuji's
+>   `RAFDataGeneration` ("0 (none)"), Canon's `Quality` ("-1 = n/a"), and two single-character digit-as-string
+>   Sony fields (`nShotsInPixelShiftGroup`/`numInPixelShiftGroup`) that reuse the GPS-ref-code pattern
+>   (`unset: 0`) T14a already established. Every other T14b scalar field has no `unset` entry and is always
+>   emitted, including as a literal `0` -- verified against all three real test files below, none of which
+>   ever show a documented sentinel value (65535/255/4294967295/127/-1) in a defined key.
+>
+> **Vendors that don't match a file's actual maker are never omitted, and this is deliberate, not an
+> oversight:** `imgdata.makernotes` is a plain struct-of-structs (one member per vendor, all twelve always
+> present in memory), not a tagged union LibRaw sets a "this file is vendor X" discriminant for -- there is no
+> reliable signal this generator can key an "omit the whole sub-object" decision on. All twelve
+> `makernotes.*` keys are therefore always present as objects on every file, matching the existing T14a
+> precedent for `lens.nikon`/`lens.dng`/`lens.makernotes`/`color.phase_one_data` (always-present nested
+> structs regardless of whether the file actually uses that maker's extension). A non-matching vendor's
+> object is *not* generally empty, either: most of its fields carry LibRaw's own zero-initialized defaults
+> (no `unset` annotation to omit them, per the rule above) rather than the vendor's real parsed data -- e.g.
+> `DSC_4985.NEF` (a Nikon file) reports a full 41-key `makernotes.canon` object, every field at its C-level
+> zero default, not `undefined`. Two fields are non-zero on *every* file regardless of vendor match, by
+> LibRaw's own constructor/`recycle()` code (not a parsing result): `makernotes.kodak.ISOCalibrationGain`
+> (always `1.0`) and `makernotes.hasselblad.nIFD_CM` (always `[-1, -1]`) -- documented on those fields'
+> `notes` would be misleading since they are not this generator's `unset` mechanism at work, so they are
+> called out here instead. `makernotes.p1` is the practical exception that reads as "empty" on every real
+> test file below (all four fields are `string`-typed and NUL-trimmed to nothing when unset, so a
+> non-Phase-One file's `p1` object has zero own keys) -- not because of any special-casing, but because every
+> field in that particular struct happens to be a string.

@@ -31,6 +31,54 @@
     "makernotes.common": {
       "cType": "libraw_metadata_common_t",
       "imgdataPath": "imgdata.makernotes.common"
+    },
+    "makernotes.canon": {
+      "cType": "libraw_canon_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.canon"
+    },
+    "makernotes.nikon": {
+      "cType": "libraw_nikon_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.nikon"
+    },
+    "makernotes.sony": {
+      "cType": "libraw_sony_info_t",
+      "imgdataPath": "imgdata.makernotes.sony"
+    },
+    "makernotes.fuji": {
+      "cType": "libraw_fuji_info_t",
+      "imgdataPath": "imgdata.makernotes.fuji"
+    },
+    "makernotes.olympus": {
+      "cType": "libraw_olympus_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.olympus"
+    },
+    "makernotes.panasonic": {
+      "cType": "libraw_panasonic_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.panasonic"
+    },
+    "makernotes.pentax": {
+      "cType": "libraw_pentax_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.pentax"
+    },
+    "makernotes.samsung": {
+      "cType": "libraw_samsung_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.samsung"
+    },
+    "makernotes.kodak": {
+      "cType": "libraw_kodak_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.kodak"
+    },
+    "makernotes.p1": {
+      "cType": "libraw_p1_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.phaseone"
+    },
+    "makernotes.hasselblad": {
+      "cType": "libraw_hasselblad_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.hasselblad"
+    },
+    "makernotes.ricoh": {
+      "cType": "libraw_ricoh_makernotes_t",
+      "imgdataPath": "imgdata.makernotes.ricoh"
     }
   },
   "structs": {
@@ -1644,6 +1692,2341 @@
           "notes": "Raw uchar* into LibRaw-owned memory; decoding autofocus point layouts is maker-specific and out of scope for T14a's core mirror.",
           "cType": "uchar*",
           "pointerDepth": 1
+        }
+      }
+    },
+    "libraw_canon_makernotes_t": {
+      "cType": "libraw_canon_makernotes_t",
+      "fieldOrder": [
+        "ColorDataVer",
+        "ColorDataSubVer",
+        "SpecularWhiteLevel",
+        "NormalWhiteLevel",
+        "ChannelBlackLevel",
+        "AverageBlackLevel",
+        "multishot",
+        "MeteringMode",
+        "SpotMeteringMode",
+        "FlashMeteringMode",
+        "FlashExposureLock",
+        "ExposureMode",
+        "AESetting",
+        "ImageStabilization",
+        "FlashMode",
+        "FlashActivity",
+        "FlashBits",
+        "ManualFlashOutput",
+        "FlashOutput",
+        "FlashGuideNumber",
+        "ContinuousDrive",
+        "SensorWidth",
+        "SensorHeight",
+        "AFMicroAdjMode",
+        "AFMicroAdjValue",
+        "MakernotesFlip",
+        "AutoRotateMode",
+        "RecordMode",
+        "SRAWQuality",
+        "wbi",
+        "RF_lensID",
+        "AutoLightingOptimizer",
+        "HighlightTonePriority",
+        "Quality",
+        "CanonLog",
+        "DefaultCropAbsolute",
+        "RecommendedImageArea",
+        "LeftOpticalBlack",
+        "UpperOpticalBlack",
+        "ActiveArea",
+        "ISOgain"
+      ],
+      "fields": {
+        "ColorDataVer": {
+          "doc": "Canon color-data maker-note record version number.",
+          "type": "int",
+          "cType": "int"
+        },
+        "ColorDataSubVer": {
+          "doc": "Canon color-data maker-note record sub-version number.",
+          "type": "int",
+          "cType": "int"
+        },
+        "SpecularWhiteLevel": {
+          "doc": "Canon specular (saturation) white level parsed from color-data.",
+          "type": "int",
+          "cType": "int"
+        },
+        "NormalWhiteLevel": {
+          "doc": "Canon normal white level parsed from color-data.",
+          "type": "int",
+          "cType": "int"
+        },
+        "ChannelBlackLevel": {
+          "doc": "Per-channel (R,G1,B,G2) black level from Canon color-data.",
+          "type": "int[]",
+          "cType": "int",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "AverageBlackLevel": {
+          "doc": "Average black level across channels from Canon color-data.",
+          "type": "int",
+          "cType": "int"
+        },
+        "multishot": {
+          "doc": "Canon multi-shot-mode per-channel data (e.g. Dual Pixel/HDR shot info).",
+          "type": "int[]",
+          "cType": "unsigned int",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "MeteringMode": {
+          "doc": "Canon metering mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "SpotMeteringMode": {
+          "doc": "Canon spot-metering sub-mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FlashMeteringMode": {
+          "doc": "Canon flash metering mode code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashExposureLock": {
+          "doc": "Canon flash exposure lock (FE lock) flag.",
+          "type": "int",
+          "cType": "short"
+        },
+        "ExposureMode": {
+          "doc": "Canon exposure mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "AESetting": {
+          "doc": "Canon auto-exposure bracketing/setting code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "ImageStabilization": {
+          "doc": "Canon image stabilization mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FlashMode": {
+          "doc": "Canon flash mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FlashActivity": {
+          "doc": "Canon flash-fired flag/activity code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FlashBits": {
+          "doc": "Canon flash configuration bit flags.",
+          "type": "int",
+          "cType": "short"
+        },
+        "ManualFlashOutput": {
+          "doc": "Canon manual flash output level code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FlashOutput": {
+          "doc": "Canon flash output level.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FlashGuideNumber": {
+          "doc": "Canon flash guide number.",
+          "type": "int",
+          "cType": "short"
+        },
+        "ContinuousDrive": {
+          "doc": "Canon continuous-drive mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "SensorWidth": {
+          "doc": "Canon sensor width parsed from maker notes, in pixels.",
+          "type": "int",
+          "cType": "short"
+        },
+        "SensorHeight": {
+          "doc": "Canon sensor height parsed from maker notes, in pixels.",
+          "type": "int",
+          "cType": "short"
+        },
+        "AFMicroAdjMode": {
+          "doc": "Canon AF micro-adjustment mode code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "AFMicroAdjValue": {
+          "doc": "Canon AF micro-adjustment value.",
+          "type": "float",
+          "cType": "float"
+        },
+        "MakernotesFlip": {
+          "doc": "Orientation flag Canon records in maker notes (LibRaw-internal flip encoding).",
+          "type": "int",
+          "cType": "short"
+        },
+        "AutoRotateMode": {
+          "doc": "Canon auto-rotate mode code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "RecordMode": {
+          "doc": "Canon record mode code (still/movie/RAW variant).",
+          "type": "int",
+          "cType": "short"
+        },
+        "SRAWQuality": {
+          "doc": "Canon sRAW quality code.",
+          "type": "int",
+          "cType": "short"
+        },
+        "wbi": {
+          "doc": "Canon white-balance index/preset code.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "RF_lensID": {
+          "doc": "Canon RF-mount lens ID code, when an RF lens is attached.",
+          "type": "int",
+          "cType": "short"
+        },
+        "AutoLightingOptimizer": {
+          "doc": "Canon Auto Lighting Optimizer setting code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "HighlightTonePriority": {
+          "doc": "Canon Highlight Tone Priority setting code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "Quality": {
+          "doc": "Canon recording-quality code (see the header comment for the value table).",
+          "type": "int",
+          "unset": -1,
+          "notes": "LibRaw's own header comment documents -1 as \"n/a\" for this field (the only Canon field with a documented sentinel; every other Canon field here has no such comment, so no `unset` is applied even though the struct is zero-initialized before parsing -- see this file's per-vendor sentinel-rule note).",
+          "cType": "short"
+        },
+        "CanonLog": {
+          "doc": "Canon Log data-compression curve code (0 off, 1 CLogV1, 2 CLogV2, 3 CLogV3).",
+          "type": "int",
+          "cType": "int"
+        },
+        "DefaultCropAbsolute": {
+          "doc": "Canon default absolute crop rectangle, as libraw_area_t.",
+          "type": "struct",
+          "cType": "libraw_area_t"
+        },
+        "RecommendedImageArea": {
+          "doc": "Canon recommended image area rectangle, as libraw_area_t.",
+          "type": "struct",
+          "cType": "libraw_area_t"
+        },
+        "LeftOpticalBlack": {
+          "doc": "Canon left optical-black (masked border) rectangle, as libraw_area_t.",
+          "type": "struct",
+          "cType": "libraw_area_t"
+        },
+        "UpperOpticalBlack": {
+          "doc": "Canon upper optical-black (masked border) rectangle, as libraw_area_t.",
+          "type": "struct",
+          "cType": "libraw_area_t"
+        },
+        "ActiveArea": {
+          "doc": "Canon active (non-masked) sensor area rectangle, as libraw_area_t.",
+          "type": "struct",
+          "cType": "libraw_area_t"
+        },
+        "ISOgain": {
+          "doc": "Canon [AutoISO, BaseISO] gain pair, per ExifTool convention.",
+          "type": "int[]",
+          "cType": "short",
+          "cArrayDims": [
+            2
+          ]
+        }
+      }
+    },
+    "libraw_area_t": {
+      "cType": "libraw_area_t",
+      "fieldOrder": [
+        "t",
+        "l",
+        "b",
+        "r"
+      ],
+      "fields": {
+        "t": {
+          "doc": "Top edge, in pixels (0,0 is the top-left pixel).",
+          "type": "int",
+          "cType": "short"
+        },
+        "l": {
+          "doc": "Left edge, in pixels.",
+          "type": "int",
+          "cType": "short"
+        },
+        "b": {
+          "doc": "Bottom edge, in pixels.",
+          "type": "int",
+          "cType": "short"
+        },
+        "r": {
+          "doc": "Right edge, in pixels.",
+          "type": "int",
+          "cType": "short"
+        }
+      }
+    },
+    "libraw_nikon_makernotes_t": {
+      "cType": "libraw_nikon_makernotes_t",
+      "fieldOrder": [
+        "ExposureBracketValue",
+        "ActiveDLighting",
+        "ShootingMode",
+        "ImageStabilization",
+        "VibrationReduction",
+        "VRMode",
+        "FlashSetting",
+        "FlashType",
+        "FlashExposureCompensation",
+        "ExternalFlashExposureComp",
+        "FlashExposureBracketValue",
+        "FlashMode",
+        "FlashExposureCompensation2",
+        "FlashExposureCompensation3",
+        "FlashExposureCompensation4",
+        "FlashSource",
+        "FlashFirmware",
+        "ExternalFlashFlags",
+        "FlashControlCommanderMode",
+        "FlashOutputAndCompensation",
+        "FlashFocalLength",
+        "FlashGNDistance",
+        "FlashGroupControlMode",
+        "FlashGroupOutputAndCompensation",
+        "FlashColorFilter",
+        "NEFCompression",
+        "ExposureMode",
+        "ExposureProgram",
+        "nMEshots",
+        "MEgainOn",
+        "ME_WB",
+        "AFFineTune",
+        "AFFineTuneIndex",
+        "AFFineTuneAdj",
+        "LensDataVersion",
+        "FlashInfoVersion",
+        "ColorBalanceVersion",
+        "key",
+        "NEFBitDepth",
+        "HighSpeedCropFormat",
+        "SensorHighSpeedCrop",
+        "SensorWidth",
+        "SensorHeight",
+        "Active_D_Lighting",
+        "PictureControlVersion",
+        "PictureControlName",
+        "PictureControlBase",
+        "ShotInfoVersion",
+        "ShotInfoFirmware",
+        "BurstTable_0x0056_len",
+        "BurstTable_0x0056",
+        "BurstTable_0x0056_ver",
+        "BurstTable_0x0056_gid",
+        "BurstTable_0x0056_fnum",
+        "MakernotesFlip",
+        "RollAngle",
+        "PitchAngle",
+        "YawAngle"
+      ],
+      "fields": {
+        "ExposureBracketValue": {
+          "doc": "Nikon exposure bracketing step value, in EV.",
+          "type": "double",
+          "cType": "double"
+        },
+        "ActiveDLighting": {
+          "doc": "Nikon Active D-Lighting setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ShootingMode": {
+          "doc": "Nikon shooting mode bit flags.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ImageStabilization": {
+          "doc": "Nikon VR (vibration reduction) status byte record, raw undecoded bytes.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            7
+          ]
+        },
+        "VibrationReduction": {
+          "doc": "Nikon vibration reduction (VR) on/off code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "VRMode": {
+          "doc": "Nikon VR mode code (e.g. normal/active/sport).",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashSetting": {
+          "doc": "Nikon flash setting string (e.g. \"Normal\", \"Slow\").",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            13
+          ]
+        },
+        "FlashType": {
+          "doc": "Nikon flash type string (e.g. \"Built-in\", \"Optional,TTL\").",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            20
+          ]
+        },
+        "FlashExposureCompensation": {
+          "doc": "Nikon flash exposure compensation, raw undecoded byte record.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "ExternalFlashExposureComp": {
+          "doc": "Nikon external flash exposure compensation, raw undecoded byte record.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "FlashExposureBracketValue": {
+          "doc": "Nikon flash exposure bracketing value, raw undecoded byte record.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "FlashMode": {
+          "doc": "Nikon flash mode code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashExposureCompensation2": {
+          "doc": "Nikon flash exposure compensation, secondary encoding.",
+          "type": "int",
+          "cType": "signed char"
+        },
+        "FlashExposureCompensation3": {
+          "doc": "Nikon flash exposure compensation, tertiary encoding.",
+          "type": "int",
+          "cType": "signed char"
+        },
+        "FlashExposureCompensation4": {
+          "doc": "Nikon flash exposure compensation, quaternary encoding.",
+          "type": "int",
+          "cType": "signed char"
+        },
+        "FlashSource": {
+          "doc": "Nikon flash source code (built-in vs external).",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashFirmware": {
+          "doc": "Nikon external flash unit firmware version, raw 2-byte record.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "ExternalFlashFlags": {
+          "doc": "Nikon external flash configuration bit flags.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashControlCommanderMode": {
+          "doc": "Nikon flash commander-mode flag.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashOutputAndCompensation": {
+          "doc": "Nikon flash output and compensation combined code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashFocalLength": {
+          "doc": "Nikon flash-zoom-head focal length code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashGNDistance": {
+          "doc": "Nikon flash guide-number distance code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "FlashGroupControlMode": {
+          "doc": "Nikon commander flash-group control mode, raw undecoded byte record.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "FlashGroupOutputAndCompensation": {
+          "doc": "Nikon commander flash-group output/compensation, raw undecoded byte record.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "FlashColorFilter": {
+          "doc": "Nikon flash color-filter code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "NEFCompression": {
+          "doc": "NEF compression type code (see the header comment for the value table).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ExposureMode": {
+          "doc": "Nikon exposure mode code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "ExposureProgram": {
+          "doc": "Nikon exposure program code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "nMEshots": {
+          "doc": "Nikon multiple-exposure shot count.",
+          "type": "int",
+          "cType": "int"
+        },
+        "MEgainOn": {
+          "doc": "Nikon multiple-exposure auto-gain flag.",
+          "type": "int",
+          "cType": "int"
+        },
+        "ME_WB": {
+          "doc": "Nikon multiple-exposure white balance multipliers.",
+          "type": "float[]",
+          "cType": "double",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "AFFineTune": {
+          "doc": "Nikon AF fine-tune on/off flag.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "AFFineTuneIndex": {
+          "doc": "Nikon AF fine-tune lens-registration index.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "AFFineTuneAdj": {
+          "doc": "Nikon AF fine-tune adjustment value.",
+          "type": "int",
+          "cType": "int8_t"
+        },
+        "LensDataVersion": {
+          "doc": "Nikon lens-data maker-note record version number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "FlashInfoVersion": {
+          "doc": "Nikon flash-info maker-note record version number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "ColorBalanceVersion": {
+          "doc": "Nikon color-balance maker-note record version number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "key": {
+          "doc": "Nikon maker-note decryption key byte (derived from the file's serial number/shutter count).",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "NEFBitDepth": {
+          "doc": "Nikon NEF per-component bit depth values.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "HighSpeedCropFormat": {
+          "doc": "Nikon high-speed-crop format code (see the header comment for the value table).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "SensorHighSpeedCrop": {
+          "doc": "Nikon high-speed-crop sensor rectangle, as libraw_sensor_highspeed_crop_t.",
+          "type": "struct",
+          "cType": "libraw_sensor_highspeed_crop_t"
+        },
+        "SensorWidth": {
+          "doc": "Nikon sensor width parsed from maker notes, in pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "SensorHeight": {
+          "doc": "Nikon sensor height parsed from maker notes, in pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "Active_D_Lighting": {
+          "doc": "Nikon Active D-Lighting applied-level code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "PictureControlVersion": {
+          "doc": "Nikon Picture Control maker-note record version number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "PictureControlName": {
+          "doc": "Nikon Picture Control preset name (e.g. \"STANDARD\", \"VIVID\").",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            20
+          ]
+        },
+        "PictureControlBase": {
+          "doc": "Nikon Picture Control base preset name this one derives from.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            20
+          ]
+        },
+        "ShotInfoVersion": {
+          "doc": "Nikon shot-info maker-note record version number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "ShotInfoFirmware": {
+          "doc": "Firmware version string recorded in the Nikon shot-info block.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            9
+          ]
+        },
+        "BurstTable_0x0056_len": {
+          "doc": "Length in bytes of the Nikon burst-table (tag 0x0056) raw payload.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "BurstTable_0x0056": {
+          "doc": "Pointer to the Nikon burst-table raw payload.",
+          "type": "unsupported",
+          "notes": "Raw uchar* into LibRaw-owned memory; a maker-specific undecoded burst-mode record, paired with BurstTable_0x0056_len -- out of scope for this generator (pointer fields are unsupported).",
+          "cType": "uchar*",
+          "pointerDepth": 1
+        },
+        "BurstTable_0x0056_ver": {
+          "doc": "Nikon burst-table (tag 0x0056) record version number.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "BurstTable_0x0056_gid": {
+          "doc": "Nikon burst-table (tag 0x0056) group ID.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "BurstTable_0x0056_fnum": {
+          "doc": "Nikon burst-table (tag 0x0056) frame number.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "MakernotesFlip": {
+          "doc": "Orientation flag Nikon records in maker notes (LibRaw-internal flip encoding).",
+          "type": "int",
+          "cType": "short"
+        },
+        "RollAngle": {
+          "doc": "Camera roll angle in degrees, positive is clockwise, from Nikon maker notes.",
+          "type": "double",
+          "cType": "double"
+        },
+        "PitchAngle": {
+          "doc": "Camera pitch angle in degrees, positive is upwards, from Nikon maker notes.",
+          "type": "double",
+          "cType": "double"
+        },
+        "YawAngle": {
+          "doc": "Camera yaw angle in degrees, positive is to the right, from Nikon maker notes.",
+          "type": "double",
+          "cType": "double"
+        }
+      }
+    },
+    "libraw_sensor_highspeed_crop_t": {
+      "cType": "libraw_sensor_highspeed_crop_t",
+      "fieldOrder": [
+        "cleft",
+        "ctop",
+        "cwidth",
+        "cheight"
+      ],
+      "fields": {
+        "cleft": {
+          "doc": "High-speed-crop left edge, in raw pixel coordinates.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ctop": {
+          "doc": "High-speed-crop top edge, in raw pixel coordinates.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "cwidth": {
+          "doc": "High-speed-crop width, in raw pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "cheight": {
+          "doc": "High-speed-crop height, in raw pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        }
+      }
+    },
+    "libraw_sony_info_t": {
+      "cType": "libraw_sony_info_t",
+      "fieldOrder": [
+        "CameraType",
+        "Sony0x9400_version",
+        "Sony0x9400_ReleaseMode2",
+        "Sony0x9400_SequenceImageNumber",
+        "Sony0x9400_SequenceLength1",
+        "Sony0x9400_SequenceFileNumber",
+        "Sony0x9400_SequenceLength2",
+        "AFAreaModeSetting",
+        "AFAreaMode",
+        "FlexibleSpotPosition",
+        "AFPointSelected",
+        "AFPointSelected_0x201e",
+        "nAFPointsUsed",
+        "AFPointsUsed",
+        "AFTracking",
+        "AFType",
+        "FocusLocation",
+        "FocusPosition",
+        "AFMicroAdjValue",
+        "AFMicroAdjOn",
+        "AFMicroAdjRegisteredLenses",
+        "VariableLowPassFilter",
+        "LongExposureNoiseReduction",
+        "HighISONoiseReduction",
+        "HDR",
+        "group2010",
+        "group9050",
+        "len_group9050",
+        "real_iso_offset",
+        "MeteringMode_offset",
+        "ExposureProgram_offset",
+        "ReleaseMode2_offset",
+        "MinoltaCamID",
+        "firmware",
+        "ImageCount3_offset",
+        "ImageCount3",
+        "ElectronicFrontCurtainShutter",
+        "MeteringMode2",
+        "SonyDateTime",
+        "ShotNumberSincePowerUp",
+        "PixelShiftGroupPrefix",
+        "PixelShiftGroupID",
+        "nShotsInPixelShiftGroup",
+        "numInPixelShiftGroup",
+        "prd_ImageHeight",
+        "prd_ImageWidth",
+        "prd_Total_bps",
+        "prd_Active_bps",
+        "prd_StorageMethod",
+        "prd_BayerPattern",
+        "SonyRawFileType",
+        "RAWFileType",
+        "RawSizeType",
+        "Quality",
+        "FileFormat",
+        "MetaVersion",
+        "AspectRatio"
+      ],
+      "fields": {
+        "CameraType": {
+          "doc": "Sony camera-type code parsed from maker notes.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "Sony0x9400_version": {
+          "doc": "Decoded format version of Sony maker-note tag 0x9400 (0xa/0xb/0xc per ExifTool convention).",
+          "type": "uint",
+          "unset": 0,
+          "notes": "Header comment: \"0 if not found/deciphered\".",
+          "cType": "uchar"
+        },
+        "Sony0x9400_ReleaseMode2": {
+          "doc": "Sony tag 0x9400 ReleaseMode2 sub-field.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "Sony0x9400_SequenceImageNumber": {
+          "doc": "Sony tag 0x9400 sequence image number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "Sony0x9400_SequenceLength1": {
+          "doc": "Sony tag 0x9400 sequence length, encoding 1.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "Sony0x9400_SequenceFileNumber": {
+          "doc": "Sony tag 0x9400 sequence file number.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "Sony0x9400_SequenceLength2": {
+          "doc": "Sony tag 0x9400 sequence length, encoding 2.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "AFAreaModeSetting": {
+          "doc": "Sony AF area mode setting code.",
+          "type": "uint",
+          "unset": 255,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "uint8_t"
+        },
+        "AFAreaMode": {
+          "doc": "Sony AF area mode code.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "uint16_t"
+        },
+        "FlexibleSpotPosition": {
+          "doc": "Sony flexible-spot AF position [x, y].",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "AFPointSelected": {
+          "doc": "Sony selected AF point index.",
+          "type": "uint",
+          "unset": 255,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "uint8_t"
+        },
+        "AFPointSelected_0x201e": {
+          "doc": "Sony selected AF point index, tag 0x201e encoding.",
+          "type": "uint",
+          "unset": 255,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "uint8_t"
+        },
+        "nAFPointsUsed": {
+          "doc": "Number of Sony AF points reported as in-focus/used.",
+          "type": "int",
+          "cType": "short"
+        },
+        "AFPointsUsed": {
+          "doc": "Sony AF point index bitfield/list actually used for this shot.",
+          "type": "int[]",
+          "cType": "uint8_t",
+          "cArrayDims": [
+            10
+          ]
+        },
+        "AFTracking": {
+          "doc": "Sony AF tracking on/off flag.",
+          "type": "uint",
+          "unset": 255,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "uint8_t"
+        },
+        "AFType": {
+          "doc": "Sony AF system type code (e.g. phase- vs contrast-detect).",
+          "type": "uint",
+          "cType": "uint8_t"
+        },
+        "FocusLocation": {
+          "doc": "Sony focus point location [x, y, width, height] in sensor coordinates.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "FocusPosition": {
+          "doc": "Sony lens focus position/distance code.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "AFMicroAdjValue": {
+          "doc": "Sony AF micro-adjustment value.",
+          "type": "int",
+          "unset": 127,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "int8_t"
+        },
+        "AFMicroAdjOn": {
+          "doc": "Sony AF micro-adjustment on/off flag.",
+          "type": "int",
+          "unset": -1,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "int8_t"
+        },
+        "AFMicroAdjRegisteredLenses": {
+          "doc": "Number of lenses with a registered Sony AF micro-adjustment value.",
+          "type": "uint",
+          "unset": 255,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "uchar"
+        },
+        "VariableLowPassFilter": {
+          "doc": "Sony variable low-pass filter setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "LongExposureNoiseReduction": {
+          "doc": "Sony long-exposure noise reduction setting code.",
+          "type": "uint",
+          "unset": 4294967295,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "unsigned"
+        },
+        "HighISONoiseReduction": {
+          "doc": "Sony high-ISO noise reduction setting code.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "HDR": {
+          "doc": "Sony in-camera HDR [mode, strength] setting.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "group2010": {
+          "doc": "Presence/length marker for the Sony maker-note tag-group starting at 0x2010 (decoder-internal).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "group9050": {
+          "doc": "Presence/length marker for the Sony maker-note tag-group starting at 0x9050 (decoder-internal).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "len_group9050": {
+          "doc": "Length of the Sony 0x9050 maker-note tag-group, in bytes (debugging only, per the header comment).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "real_iso_offset": {
+          "doc": "Byte offset of Sony's \"real\" (measured) ISO field within its maker-note record.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "MeteringMode_offset": {
+          "doc": "Byte offset of Sony's metering-mode field within its maker-note record.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ExposureProgram_offset": {
+          "doc": "Byte offset of Sony's exposure-program field within its maker-note record.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ReleaseMode2_offset": {
+          "doc": "Byte offset of Sony's ReleaseMode2 field within its maker-note record.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "MinoltaCamID": {
+          "doc": "Legacy Minolta camera-model ID some Sony/Minolta-derived files carry.",
+          "type": "uint",
+          "unset": 4294967295,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "unsigned"
+        },
+        "firmware": {
+          "doc": "Sony camera firmware version number.",
+          "type": "float",
+          "cType": "float"
+        },
+        "ImageCount3_offset": {
+          "doc": "Byte offset of the Sony ImageCount3 field within its maker-note record.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "ImageCount3": {
+          "doc": "Sony cumulative image (shutter actuation) count, encoding 3.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "ElectronicFrontCurtainShutter": {
+          "doc": "Sony electronic front-curtain shutter on/off flag.",
+          "type": "uint",
+          "unset": 4294967295,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "unsigned"
+        },
+        "MeteringMode2": {
+          "doc": "Sony metering mode code, secondary encoding.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "SonyDateTime": {
+          "doc": "Capture date/time string as recorded in Sony maker notes.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            20
+          ]
+        },
+        "ShotNumberSincePowerUp": {
+          "doc": "Number of shots taken since the camera was last powered on.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "PixelShiftGroupPrefix": {
+          "doc": "Sony pixel-shift-group identifier prefix.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "PixelShiftGroupID": {
+          "doc": "Sony pixel-shift-group identifier.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "nShotsInPixelShiftGroup": {
+          "doc": "Number of shots in this file's Sony pixel-shift group, as an ASCII digit character.",
+          "type": "string",
+          "unset": 0,
+          "cType": "char"
+        },
+        "numInPixelShiftGroup": {
+          "doc": "This shot's position within its Sony pixel-shift group, as an ASCII digit character ('0' for ARQ, '1' for the group's first shot).",
+          "type": "string",
+          "unset": 0,
+          "cType": "char"
+        },
+        "prd_ImageHeight": {
+          "doc": "Sony PRD (raw-data descriptor) image height, in pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "prd_ImageWidth": {
+          "doc": "Sony PRD (raw-data descriptor) image width, in pixels.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "prd_Total_bps": {
+          "doc": "Sony PRD total bits per sample.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "prd_Active_bps": {
+          "doc": "Sony PRD active (meaningful) bits per sample.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "prd_StorageMethod": {
+          "doc": "Sony PRD storage method code (82 padded, 89 linear).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "prd_BayerPattern": {
+          "doc": "Sony PRD Bayer CFA pattern code (1 RGGB, 4 GBRG).",
+          "type": "uint",
+          "unset": 0,
+          "notes": "Header comment: \"0 -> not valid\".",
+          "cType": "ushort"
+        },
+        "SonyRawFileType": {
+          "doc": "Sony raw-file sub-type code (see the header comment for the value table); takes precedence over RAWFileType/Quality for ARW 2.0+.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "RAWFileType": {
+          "doc": "Sony raw-file type code (0 compressed, 1 uncompressed, 2 lossless compressed v2); takes precedence over Quality.",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "RawSizeType": {
+          "doc": "Sony raw image-size class code (1 large, 2 small, 3 medium).",
+          "type": "uint",
+          "unset": 65535,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "ushort"
+        },
+        "Quality": {
+          "doc": "Sony recording-quality code (0/6 raw, 7/8 compressed raw).",
+          "type": "uint",
+          "unset": 4294967295,
+          "notes": "See this file's per-vendor sentinel-rule note: LibRaw's header comments document this field's C-level \"init in\" default explicitly, unlike most other vendor fields.",
+          "cType": "unsigned"
+        },
+        "FileFormat": {
+          "doc": "Sony raw-format version code (see the header comment for the value table, e.g. 3000 = ARW 2.0).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "MetaVersion": {
+          "doc": "Sony maker-note metadata format version string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            16
+          ]
+        },
+        "AspectRatio": {
+          "doc": "Sony recorded aspect ratio.",
+          "type": "float",
+          "cType": "float"
+        }
+      }
+    },
+    "libraw_fuji_info_t": {
+      "cType": "libraw_fuji_info_t",
+      "fieldOrder": [
+        "ExpoMidPointShift",
+        "DynamicRange",
+        "FilmMode",
+        "DynamicRangeSetting",
+        "DevelopmentDynamicRange",
+        "AutoDynamicRange",
+        "DRangePriority",
+        "DRangePriorityAuto",
+        "DRangePriorityFixed",
+        "FujiModel",
+        "FujiModel2",
+        "BrightnessCompensation",
+        "FocusMode",
+        "AFMode",
+        "FocusPixel",
+        "PrioritySettings",
+        "FocusSettings",
+        "AF_C_Settings",
+        "FocusWarning",
+        "ImageStabilization",
+        "FlashMode",
+        "WB_Preset",
+        "ShutterType",
+        "ExrMode",
+        "Macro",
+        "Rating",
+        "CropMode",
+        "SerialSignature",
+        "SensorID",
+        "RAFVersion",
+        "RAFDataGeneration",
+        "RAFDataVersion",
+        "isTSNERDTS",
+        "DriveMode",
+        "BlackLevel",
+        "RAFData_ImageSizeTable",
+        "AutoBracketing",
+        "SequenceNumber",
+        "SeriesLength",
+        "PixelShiftOffset",
+        "ImageCount"
+      ],
+      "fields": {
+        "ExpoMidPointShift": {
+          "doc": "Fuji exposure mid-point shift, in EV.",
+          "type": "float",
+          "cType": "float"
+        },
+        "DynamicRange": {
+          "doc": "Fuji Dynamic Range setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FilmMode": {
+          "doc": "Fuji Film Simulation mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "DynamicRangeSetting": {
+          "doc": "Fuji Dynamic Range setting mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "DevelopmentDynamicRange": {
+          "doc": "Fuji development (in-camera JPEG) Dynamic Range code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AutoDynamicRange": {
+          "doc": "Fuji Auto Dynamic Range setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "DRangePriority": {
+          "doc": "Fuji D-Range Priority setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "DRangePriorityAuto": {
+          "doc": "Fuji D-Range Priority Auto sub-setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "DRangePriorityFixed": {
+          "doc": "Fuji D-Range Priority Fixed sub-setting code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FujiModel": {
+          "doc": "Fuji internal model name string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            33
+          ]
+        },
+        "FujiModel2": {
+          "doc": "Fuji internal secondary model name string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            33
+          ]
+        },
+        "BrightnessCompensation": {
+          "doc": "Fuji brightness compensation, in EV (raw data scaled by 2^value when set).",
+          "type": "float",
+          "cType": "float"
+        },
+        "FocusMode": {
+          "doc": "Fuji focus mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AFMode": {
+          "doc": "Fuji AF mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusPixel": {
+          "doc": "Fuji focus-point pixel coordinates [x, y].",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "PrioritySettings": {
+          "doc": "Fuji shutter/release priority settings code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusSettings": {
+          "doc": "Fuji focus settings bit flags.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "AF_C_Settings": {
+          "doc": "Fuji AF-C (continuous AF) custom settings bit flags.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "FocusWarning": {
+          "doc": "Fuji focus-warning (possible missed focus) flag.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ImageStabilization": {
+          "doc": "Fuji image stabilization [mode, ..., ...] setting values.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "FlashMode": {
+          "doc": "Fuji flash mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "WB_Preset": {
+          "doc": "Fuji white balance preset code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ShutterType": {
+          "doc": "Fuji shutter type code (0 mechanical, 1 electronic, 2 electronic long, 3 electronic front-curtain).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "ExrMode": {
+          "doc": "Fuji EXR sensor mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "Macro": {
+          "doc": "Fuji macro mode on/off flag.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "Rating": {
+          "doc": "Star rating assigned to the image in-camera.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "CropMode": {
+          "doc": "Fuji sensor crop mode code (see the header comment for the value table).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "SerialSignature": {
+          "doc": "Fuji sensor serial-number signature string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            13
+          ]
+        },
+        "SensorID": {
+          "doc": "Fuji sensor ID string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            5
+          ]
+        },
+        "RAFVersion": {
+          "doc": "RAF (raw file format) version string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            5
+          ]
+        },
+        "RAFDataGeneration": {
+          "doc": "RAF data-generation code (1..4, or 4096).",
+          "type": "int",
+          "unset": 0,
+          "notes": "Header comment: \"0 (none), 1..4, 4096\".",
+          "cType": "int"
+        },
+        "RAFDataVersion": {
+          "doc": "RAF data record version number.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "isTSNERDTS": {
+          "doc": "Flag for a Fuji sensor/processing variant LibRaw identifies internally as \"TSNERDTS\".",
+          "type": "int",
+          "cType": "int"
+        },
+        "DriveMode": {
+          "doc": "Fuji drive mode code (0 single frame, 1 continuous low, 2 continuous high).",
+          "type": "int",
+          "cType": "short"
+        },
+        "BlackLevel": {
+          "doc": "Per-channel black level table some Fuji models embed in maker notes (see the header comment for the model list).",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            9
+          ]
+        },
+        "RAFData_ImageSizeTable": {
+          "doc": "RAF internal per-mode image-size lookup table.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            32
+          ]
+        },
+        "AutoBracketing": {
+          "doc": "Fuji auto-bracketing mode code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "SequenceNumber": {
+          "doc": "Frame sequence number within a Fuji burst/bracket sequence.",
+          "type": "int",
+          "cType": "int"
+        },
+        "SeriesLength": {
+          "doc": "Length of the Fuji burst/bracket series this frame belongs to.",
+          "type": "int",
+          "cType": "int"
+        },
+        "PixelShiftOffset": {
+          "doc": "Fuji pixel-shift multi-shot [x, y] sub-pixel offset for this frame.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "ImageCount": {
+          "doc": "Fuji cumulative image (shutter actuation) count.",
+          "type": "int",
+          "cType": "int"
+        }
+      }
+    },
+    "libraw_olympus_makernotes_t": {
+      "cType": "libraw_olympus_makernotes_t",
+      "fieldOrder": [
+        "CameraType2",
+        "ValidBits",
+        "tagX640",
+        "tagX641",
+        "tagX642",
+        "tagX643",
+        "tagX644",
+        "tagX645",
+        "tagX646",
+        "tagX647",
+        "tagX648",
+        "tagX649",
+        "tagX650",
+        "tagX651",
+        "tagX652",
+        "tagX653",
+        "SensorCalibration",
+        "DriveMode",
+        "ColorSpace",
+        "FocusMode",
+        "AutoFocus",
+        "AFPoint",
+        "AFAreas",
+        "AFPointSelected",
+        "AFResult",
+        "AFFineTune",
+        "AFFineTuneAdj",
+        "SpecialMode",
+        "ZoomStepCount",
+        "FocusStepCount",
+        "FocusStepInfinity",
+        "FocusStepNear",
+        "FocusDistance",
+        "AspectFrame",
+        "StackedImage",
+        "isLiveND",
+        "LiveNDfactor",
+        "Panorama_mode",
+        "Panorama_frameNum"
+      ],
+      "fields": {
+        "CameraType2": {
+          "doc": "Olympus internal camera-type code string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            6
+          ]
+        },
+        "ValidBits": {
+          "doc": "Valid bits per sample, as recorded by Olympus maker notes.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "tagX640": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 0).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX641": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 1).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX642": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 2).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX643": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 3).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX644": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 4).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX645": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 5).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX646": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 6).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX647": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 7).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX648": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 8).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX649": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 9).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX650": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 10).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX651": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 11).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX652": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 12).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "tagX653": {
+          "doc": "Undocumented Olympus decoder-internal maker-note value (tag group 0x0640-0x0653, entry 13).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "SensorCalibration": {
+          "doc": "Olympus sensor calibration [gain, offset] pair.",
+          "type": "int[]",
+          "cType": "int",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "DriveMode": {
+          "doc": "Olympus drive-mode setting values.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            5
+          ]
+        },
+        "ColorSpace": {
+          "doc": "Olympus color space code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusMode": {
+          "doc": "Olympus focus-mode setting values.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "AutoFocus": {
+          "doc": "Olympus autofocus on/off flag.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AFPoint": {
+          "doc": "Olympus selected AF point index.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AFAreas": {
+          "doc": "Olympus AF area bitfield/coordinate table.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "AFPointSelected": {
+          "doc": "Olympus selected AF point, normalized coordinates.",
+          "type": "float[]",
+          "cType": "double",
+          "cArrayDims": [
+            5
+          ]
+        },
+        "AFResult": {
+          "doc": "Olympus AF result (in-focus/failed) code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AFFineTune": {
+          "doc": "Olympus AF fine-tune on/off flag.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "AFFineTuneAdj": {
+          "doc": "Olympus AF fine-tune adjustment values.",
+          "type": "int[]",
+          "cType": "short",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "SpecialMode": {
+          "doc": "Olympus special shooting mode [group, mode, sub-mode] code.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "ZoomStepCount": {
+          "doc": "Olympus zoom lens step-position count.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusStepCount": {
+          "doc": "Olympus focus lens step-position count.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusStepInfinity": {
+          "doc": "Olympus focus step count corresponding to infinity focus.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusStepNear": {
+          "doc": "Olympus focus step count corresponding to the near focus limit.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FocusDistance": {
+          "doc": "Olympus focus distance, in meters.",
+          "type": "double",
+          "cType": "double"
+        },
+        "AspectFrame": {
+          "doc": "Olympus aspect-ratio crop frame [left, top, width, height].",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "StackedImage": {
+          "doc": "Olympus focus/image-stacking [count, index] pair.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "isLiveND": {
+          "doc": "Olympus Live ND (electronic neutral density) on/off flag.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "LiveNDfactor": {
+          "doc": "Olympus Live ND applied attenuation factor.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "Panorama_mode": {
+          "doc": "Olympus in-camera panorama mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "Panorama_frameNum": {
+          "doc": "Frame number within an Olympus in-camera panorama sequence.",
+          "type": "uint",
+          "cType": "ushort"
+        }
+      }
+    },
+    "libraw_panasonic_makernotes_t": {
+      "cType": "libraw_panasonic_makernotes_t",
+      "fieldOrder": [
+        "Compression",
+        "BlackLevelDim",
+        "BlackLevel",
+        "Multishot",
+        "gamma",
+        "HighISOMultiplier",
+        "FocusStepNear",
+        "FocusStepCount",
+        "ZoomPosition",
+        "LensManufacturer"
+      ],
+      "fields": {
+        "Compression": {
+          "doc": "Panasonic/Leica raw compression code (see the header comment for the value table).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "BlackLevelDim": {
+          "doc": "Number of valid entries in BlackLevel.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "BlackLevel": {
+          "doc": "Per-channel black level table from Panasonic maker notes.",
+          "type": "float[]",
+          "cType": "float",
+          "cArrayDims": [
+            8
+          ]
+        },
+        "Multishot": {
+          "doc": "Panasonic multi-shot mode code (0 off, 65536 Pixel Shift).",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "gamma": {
+          "doc": "Panasonic gamma value applied/recorded for this file.",
+          "type": "float",
+          "cType": "float"
+        },
+        "HighISOMultiplier": {
+          "doc": "Panasonic per-channel (R,G,B) high-ISO multiplier.",
+          "type": "int[]",
+          "cType": "int",
+          "cArrayDims": [
+            3
+          ]
+        },
+        "FocusStepNear": {
+          "doc": "Panasonic lens focus step count towards the near limit.",
+          "type": "int",
+          "cType": "short"
+        },
+        "FocusStepCount": {
+          "doc": "Panasonic lens focus step count at the time of capture.",
+          "type": "int",
+          "cType": "short"
+        },
+        "ZoomPosition": {
+          "doc": "Panasonic zoom lens position code.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "LensManufacturer": {
+          "doc": "Panasonic lens-manufacturer code.",
+          "type": "uint",
+          "cType": "unsigned"
+        }
+      }
+    },
+    "libraw_pentax_makernotes_t": {
+      "cType": "libraw_pentax_makernotes_t",
+      "fieldOrder": [
+        "DriveMode",
+        "FocusMode",
+        "AFPointSelected",
+        "AFPointSelected_Area",
+        "AFPointsInFocus_version",
+        "AFPointsInFocus",
+        "FocusPosition",
+        "DynamicRangeExpansion",
+        "AFAdjustment",
+        "AFPointMode",
+        "MultiExposure",
+        "Quality"
+      ],
+      "fields": {
+        "DriveMode": {
+          "doc": "Pentax drive-mode setting bytes.",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "FocusMode": {
+          "doc": "Pentax focus-mode setting values.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "AFPointSelected": {
+          "doc": "Pentax selected AF point [mode, point] pair.",
+          "type": "int[]",
+          "cType": "ushort",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "AFPointSelected_Area": {
+          "doc": "Pentax selected AF point area code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AFPointsInFocus_version": {
+          "doc": "Format version of the Pentax AF-points-in-focus record.",
+          "type": "int",
+          "cType": "int"
+        },
+        "AFPointsInFocus": {
+          "doc": "Pentax AF points reported in-focus, as a bitfield.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "FocusPosition": {
+          "doc": "Pentax lens focus position code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "DynamicRangeExpansion": {
+          "doc": "Pentax dynamic range expansion setting bytes (entry 1 > 0 adds entry 0 to the black level, per the header comment).",
+          "type": "bytes",
+          "cType": "uchar",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "AFAdjustment": {
+          "doc": "Pentax AF micro-adjustment value.",
+          "type": "int",
+          "cType": "short"
+        },
+        "AFPointMode": {
+          "doc": "Pentax AF point selection mode code.",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "MultiExposure": {
+          "doc": "Pentax multi-exposure setting flags (per the header comment, the last bit is 0 when multi-exposure is not used).",
+          "type": "uint",
+          "cType": "uchar"
+        },
+        "Quality": {
+          "doc": "Pentax recording-quality code (4 raw, 7 raw+pixel-shift, 8 raw+dynamic pixel-shift).",
+          "type": "uint",
+          "cType": "ushort"
+        }
+      }
+    },
+    "libraw_samsung_makernotes_t": {
+      "cType": "libraw_samsung_makernotes_t",
+      "fieldOrder": [
+        "ImageSizeFull",
+        "ImageSizeCrop",
+        "ColorSpace",
+        "key",
+        "DigitalGain",
+        "DeviceType",
+        "LensFirmware"
+      ],
+      "fields": {
+        "ImageSizeFull": {
+          "doc": "Samsung full sensor image size [left, top, width, height].",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "ImageSizeCrop": {
+          "doc": "Samsung cropped output image size [left, top, width, height].",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            4
+          ]
+        },
+        "ColorSpace": {
+          "doc": "Samsung color space [tag, value] pair.",
+          "type": "int[]",
+          "cType": "int",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "key": {
+          "doc": "Samsung maker-note decryption/derivation key material (11 words).",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            11
+          ]
+        },
+        "DigitalGain": {
+          "doc": "Samsung digital gain (PostAEGain / digital stretch) applied.",
+          "type": "double",
+          "cType": "double"
+        },
+        "DeviceType": {
+          "doc": "Samsung device-type code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "LensFirmware": {
+          "doc": "Samsung lens firmware version string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            32
+          ]
+        }
+      }
+    },
+    "libraw_kodak_makernotes_t": {
+      "cType": "libraw_kodak_makernotes_t",
+      "fieldOrder": [
+        "BlackLevelTop",
+        "BlackLevelBottom",
+        "offset_left",
+        "offset_top",
+        "clipBlack",
+        "clipWhite",
+        "romm_camDaylight",
+        "romm_camTungsten",
+        "romm_camFluorescent",
+        "romm_camFlash",
+        "romm_camCustom",
+        "romm_camAuto",
+        "val018percent",
+        "val100percent",
+        "val170percent",
+        "MakerNoteKodak8a",
+        "ISOCalibrationGain",
+        "AnalogISO"
+      ],
+      "fields": {
+        "BlackLevelTop": {
+          "doc": "Kodak black level for the top sensor region.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "BlackLevelBottom": {
+          "doc": "Kodak black level for the bottom sensor region.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "offset_left": {
+          "doc": "Kodak KDC left sensor offset (may be negative or zero).",
+          "type": "int",
+          "cType": "short"
+        },
+        "offset_top": {
+          "doc": "Kodak KDC top sensor offset (may be negative or zero).",
+          "type": "int",
+          "cType": "short"
+        },
+        "clipBlack": {
+          "doc": "Kodak clipping black-point value (valid for the P712/P850/P880 models).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "clipWhite": {
+          "doc": "Kodak clipping white-point value (valid for the P712/P850/P880 models).",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "romm_camDaylight": {
+          "doc": "Kodak ROMM (ProPhoto RGB) to camera-RGB matrix, daylight illuminant.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            3
+          ]
+        },
+        "romm_camTungsten": {
+          "doc": "Kodak ROMM to camera-RGB matrix, tungsten illuminant.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            3
+          ]
+        },
+        "romm_camFluorescent": {
+          "doc": "Kodak ROMM to camera-RGB matrix, fluorescent illuminant.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            3
+          ]
+        },
+        "romm_camFlash": {
+          "doc": "Kodak ROMM to camera-RGB matrix, flash illuminant.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            3
+          ]
+        },
+        "romm_camCustom": {
+          "doc": "Kodak ROMM to camera-RGB matrix, custom illuminant.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            3
+          ]
+        },
+        "romm_camAuto": {
+          "doc": "Kodak ROMM to camera-RGB matrix, auto-selected illuminant.",
+          "type": "matrix",
+          "cType": "float",
+          "cArrayDims": [
+            3,
+            3
+          ]
+        },
+        "val018percent": {
+          "doc": "Kodak tone-curve calibration value at the 18% (mid-gray) point.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "val100percent": {
+          "doc": "Kodak tone-curve calibration value at the 100% (white) point.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "val170percent": {
+          "doc": "Kodak tone-curve calibration value at the 170% (highlight headroom) point.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "MakerNoteKodak8a": {
+          "doc": "Raw value of Kodak maker-note tag 0x8a (undocumented by Kodak).",
+          "type": "int",
+          "cType": "short"
+        },
+        "ISOCalibrationGain": {
+          "doc": "Kodak ISO calibration gain factor.",
+          "type": "float",
+          "cType": "float"
+        },
+        "AnalogISO": {
+          "doc": "Kodak analog (sensor-level) ISO value, before digital gain.",
+          "type": "float",
+          "cType": "float"
+        }
+      }
+    },
+    "libraw_p1_makernotes_t": {
+      "cType": "libraw_p1_makernotes_t",
+      "fieldOrder": [
+        "Software",
+        "SystemType",
+        "FirmwareString",
+        "SystemModel"
+      ],
+      "fields": {
+        "Software": {
+          "doc": "Phase One capture software name/version string (maker-note tag 0x0203).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "SystemType": {
+          "doc": "Phase One system type string (maker-note tag 0x0204).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "FirmwareString": {
+          "doc": "Phase One firmware version string (maker-note tag 0x0301).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            256
+          ]
+        },
+        "SystemModel": {
+          "doc": "Phase One system model string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        }
+      }
+    },
+    "libraw_hasselblad_makernotes_t": {
+      "cType": "libraw_hasselblad_makernotes_t",
+      "fieldOrder": [
+        "BaseISO",
+        "Gain",
+        "Sensor",
+        "SensorUnit",
+        "HostBody",
+        "SensorCode",
+        "SensorSubCode",
+        "CoatingCode",
+        "uncropped",
+        "CaptureSequenceInitiator",
+        "SensorUnitConnector",
+        "format",
+        "nIFD_CM",
+        "RecommendedCrop",
+        "mnColorMatrix"
+      ],
+      "fields": {
+        "BaseISO": {
+          "doc": "Hasselblad base ISO sensitivity.",
+          "type": "int",
+          "cType": "int"
+        },
+        "Gain": {
+          "doc": "Hasselblad sensor gain applied.",
+          "type": "double",
+          "cType": "double"
+        },
+        "Sensor": {
+          "doc": "Hasselblad sensor identifier string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            8
+          ]
+        },
+        "SensorUnit": {
+          "doc": "Hasselblad sensor-unit (\"SU\") identifier string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "HostBody": {
+          "doc": "Hasselblad host-body (\"HB\") identifier string.",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "SensorCode": {
+          "doc": "Hasselblad sensor code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "SensorSubCode": {
+          "doc": "Hasselblad sensor sub-code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "CoatingCode": {
+          "doc": "Hasselblad sensor coating code.",
+          "type": "int",
+          "cType": "int"
+        },
+        "uncropped": {
+          "doc": "Non-zero if the raw data is the uncropped full sensor read-out.",
+          "type": "int",
+          "cType": "int"
+        },
+        "CaptureSequenceInitiator": {
+          "doc": "String identifying what initiated this Hasselblad capture sequence (e.g. camera settings menu entry).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            32
+          ]
+        },
+        "SensorUnitConnector": {
+          "doc": "Hasselblad sensor-unit connector identifier string (maker-note tag 0x0015).",
+          "type": "string",
+          "cType": "char",
+          "cArrayDims": [
+            64
+          ]
+        },
+        "format": {
+          "doc": "Hasselblad file format code (3FR, FFF, Imacon, or Hasselblad/Phocus DNG).",
+          "type": "int",
+          "cType": "int"
+        },
+        "nIFD_CM": {
+          "doc": "Number of the IFD containing each Hasselblad color-matrix (CM) record.",
+          "type": "int[]",
+          "cType": "int",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "RecommendedCrop": {
+          "doc": "Hasselblad recommended crop [width, height].",
+          "type": "int[]",
+          "cType": "int",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "mnColorMatrix": {
+          "doc": "Hasselblad maker-note color matrix (tag 0x002a), when present.",
+          "type": "matrix",
+          "cType": "double",
+          "cArrayDims": [
+            4,
+            3
+          ]
+        }
+      }
+    },
+    "libraw_ricoh_makernotes_t": {
+      "cType": "libraw_ricoh_makernotes_t",
+      "fieldOrder": [
+        "AFStatus",
+        "AFAreaXPosition",
+        "AFAreaYPosition",
+        "AFAreaMode",
+        "SensorWidth",
+        "SensorHeight",
+        "CroppedImageWidth",
+        "CroppedImageHeight",
+        "WideAdapter",
+        "CropMode",
+        "NDFilter",
+        "AutoBracketing",
+        "MacroMode",
+        "FlashMode",
+        "FlashExposureComp",
+        "ManualFlashOutput"
+      ],
+      "fields": {
+        "AFStatus": {
+          "doc": "Ricoh AF status code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AFAreaXPosition": {
+          "doc": "Ricoh AF area X positions.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "AFAreaYPosition": {
+          "doc": "Ricoh AF area Y positions.",
+          "type": "int[]",
+          "cType": "unsigned",
+          "cArrayDims": [
+            2
+          ]
+        },
+        "AFAreaMode": {
+          "doc": "Ricoh AF area mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "SensorWidth": {
+          "doc": "Ricoh sensor width parsed from maker notes, in pixels.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "SensorHeight": {
+          "doc": "Ricoh sensor height parsed from maker notes, in pixels.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "CroppedImageWidth": {
+          "doc": "Ricoh cropped output image width, in pixels.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "CroppedImageHeight": {
+          "doc": "Ricoh cropped output image height, in pixels.",
+          "type": "uint",
+          "cType": "unsigned"
+        },
+        "WideAdapter": {
+          "doc": "Ricoh wide-conversion-adapter attached flag.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "CropMode": {
+          "doc": "Ricoh sensor crop mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "NDFilter": {
+          "doc": "Ricoh built-in neutral-density filter on/off flag.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "AutoBracketing": {
+          "doc": "Ricoh auto-bracketing mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "MacroMode": {
+          "doc": "Ricoh macro mode on/off flag.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FlashMode": {
+          "doc": "Ricoh flash mode code.",
+          "type": "uint",
+          "cType": "ushort"
+        },
+        "FlashExposureComp": {
+          "doc": "Ricoh flash exposure compensation, in EV.",
+          "type": "double",
+          "cType": "double"
+        },
+        "ManualFlashOutput": {
+          "doc": "Ricoh manual flash output level.",
+          "type": "double",
+          "cType": "double"
         }
       }
     }

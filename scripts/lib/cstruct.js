@@ -10,9 +10,12 @@
 //     one non-typedef'd struct LibRaw declares this way, ph1_t).
 //   - fixed-size arrays, one or two dimensions (`float gamm[6]`,
 //     `int mask[8][4]`, `int WB_Coeffs[256][4]`), with either a numeric
-//     literal (decimal or 0x-hex, e.g. `curve[0x10000]`) or a macro name
+//     literal (decimal or 0x-hex, e.g. `curve[0x10000]`), a macro name
 //     (e.g. `cblack[LIBRAW_CBLACK_SIZE]`, resolved via the caller-supplied
-//     `macros` map) as the length.
+//     `macros` map), or a '+'-separated sum of either (e.g. LibRaw's
+//     `char FujiModel[32 + 1]` NUL-terminator idiom) as the length. No other
+//     arithmetic operator appears in a LibRaw array length, so '+' is the
+//     only one this grammar understands.
 //   - pointers: `char *output_profile`, `char **custom_camera_strings`,
 //     `void *profile`.
 //   - comma-separated declarator lists sharing one base type, each
@@ -32,7 +35,7 @@ const UNSIGNED_SIGNED_CONTINUATIONS = new Set(['short', 'char', 'long', 'int']);
 // Tokenizer: hex literals before decimal (0x10000 must not be split into
 // "0" + "x10000"), then decimal literals, identifiers (including macro
 // names used as array lengths), and the punctuation this grammar needs.
-const TOKEN_RE = /0[xX][0-9A-Fa-f]+|\d+|[A-Za-z_]\w*|[[\]*,]/g;
+const TOKEN_RE = /0[xX][0-9A-Fa-f]+|\d+|[A-Za-z_]\w*|[[\]*,+]/g;
 
 function tokenize(stmt) {
   return stmt.match(TOKEN_RE) || [];
@@ -139,20 +142,33 @@ function parseStructFields(body, cTypeName, macros = {}) {
       const arrayDims = [];
       while (tokens[idx] === '[') {
         idx++; // consume '['
-        const dimTok = tokens[idx];
-        idx++;
+        // A dimension is one or more '+'-separated terms (each a numeric
+        // literal or a macro name), e.g. `FujiModel[32 + 1]` or (were it
+        // ever needed) `x[SOME_MACRO + 1]`. LibRaw's headers use this only
+        // for small "+1" NUL-terminator adjustments on char[] buffers, never
+        // subtraction or multiplication, so '+' is the only operator this
+        // grammar needs to understand.
+        let dim = 0;
+        for (;;) {
+          const termTok = tokens[idx];
+          idx++;
+          if (/^(?:\d+|0[xX][0-9A-Fa-f]+)$/.test(termTok)) {
+            dim += Number(termTok);
+          } else if (Object.prototype.hasOwnProperty.call(macros, termTok)) {
+            dim += macros[termTok];
+          } else {
+            throw new Error(`gen-cstruct: unresolved array-length macro ${JSON.stringify(termTok)} in ${cTypeName}.${name} (pass it in \`macros\`)`);
+          }
+          if (tokens[idx] === '+') {
+            idx++;
+            continue;
+          }
+          break;
+        }
         if (tokens[idx] !== ']') {
           throw new Error(`gen-cstruct: malformed array dimension in ${cTypeName}.${name}: ${JSON.stringify(stmt)}`);
         }
         idx++; // consume ']'
-        let dim;
-        if (/^(?:\d+|0[xX][0-9A-Fa-f]+)$/.test(dimTok)) {
-          dim = Number(dimTok);
-        } else if (Object.prototype.hasOwnProperty.call(macros, dimTok)) {
-          dim = macros[dimTok];
-        } else {
-          throw new Error(`gen-cstruct: unresolved array-length macro ${JSON.stringify(dimTok)} in ${cTypeName}.${name} (pass it in \`macros\`)`);
-        }
         arrayDims.push(dim);
       }
 

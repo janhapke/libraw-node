@@ -15,22 +15,35 @@
 //   lens                -> imgdata.lens                 (libraw_lensinfo_t)
 //   color               -> imgdata.color                (libraw_colordata_t)
 //   makernotes.common   -> imgdata.makernotes.common     (libraw_metadata_common_t)
+//   makernotes.canon      -> imgdata.makernotes.canon      (libraw_canon_makernotes_t)
+//   makernotes.nikon      -> imgdata.makernotes.nikon      (libraw_nikon_makernotes_t)
+//   makernotes.sony       -> imgdata.makernotes.sony       (libraw_sony_info_t)
+//   makernotes.fuji       -> imgdata.makernotes.fuji       (libraw_fuji_info_t)
+//   makernotes.olympus    -> imgdata.makernotes.olympus    (libraw_olympus_makernotes_t)
+//   makernotes.panasonic  -> imgdata.makernotes.panasonic  (libraw_panasonic_makernotes_t)
+//   makernotes.pentax     -> imgdata.makernotes.pentax     (libraw_pentax_makernotes_t)
+//   makernotes.samsung    -> imgdata.makernotes.samsung    (libraw_samsung_makernotes_t)
+//   makernotes.kodak      -> imgdata.makernotes.kodak      (libraw_kodak_makernotes_t)
+//   makernotes.p1         -> imgdata.makernotes.phaseone   (libraw_p1_makernotes_t --
+//                             LibRaw's own field name is `phaseone`, the JS-facing
+//                             group key is `p1` per docs/plan/tasks.md's T14b list)
+//   makernotes.hasselblad -> imgdata.makernotes.hasselblad (libraw_hasselblad_makernotes_t)
+//   makernotes.ricoh      -> imgdata.makernotes.ricoh      (libraw_ricoh_makernotes_t)
+// (the last twelve are T14b; the first six are T14a)
 //
-// Unlike gen-manifest.js's two structs (flat, no nesting), these six nest
-// typedef'd sub-structs (e.g. libraw_lensinfo_t.nikon is a
-// libraw_nikonlens_t) and one non-typedef'd one (libraw_colordata_t.
+// Unlike gen-manifest.js's two structs (flat, no nesting), these eighteen
+// nest typedef'd sub-structs (e.g. libraw_lensinfo_t.nikon is a
+// libraw_nikonlens_t, libraw_nikon_makernotes_t.SensorHighSpeedCrop is a
+// libraw_sensor_highspeed_crop_t) and one non-typedef'd one (libraw_colordata_t.
 // phase_one_data is a `struct ph1_t`). scripts/lib/cstruct.js's field parser
 // reports each such field's C type as its `baseType`; this generator
 // recursively parses (and requires annotations for) every struct type it
 // reaches this way, keyed by that exact baseType string (e.g.
 // "libraw_nikonlens_t", "struct ph1_t") in both api/metadata.json's
 // `structs` map and api/metadata.annotations.json's `structs` map. A struct
-// type reached from more than one place (there are none among these six
-// groups' fields, but the scheme supports it) is parsed and annotated once,
-// not once per reference path.
-//
-// Per-vendor makernotes (imgdata.makernotes.{canon,nikon,sony,...}) are
-// T14b, not this generator -- see docs/plan/tasks.md's T14b section.
+// type reached from more than one place (there are none among these
+// eighteen groups' fields, but the scheme supports it) is parsed and
+// annotated once, not once per reference path.
 //
 // Outputs:
 //   api/metadata.json -- deterministic (header field order, no timestamps),
@@ -65,6 +78,21 @@ const GROUPS = [
   { key: 'lens', cTypeName: 'libraw_lensinfo_t', imgdataPath: 'imgdata.lens' },
   { key: 'color', cTypeName: 'libraw_colordata_t', imgdataPath: 'imgdata.color' },
   { key: 'makernotes.common', cTypeName: 'libraw_metadata_common_t', imgdataPath: 'imgdata.makernotes.common' },
+  // T14b: per-vendor makernotes, landed in this order (docs/plan/tasks.md's T14b list).
+  { key: 'makernotes.canon', cTypeName: 'libraw_canon_makernotes_t', imgdataPath: 'imgdata.makernotes.canon' },
+  { key: 'makernotes.nikon', cTypeName: 'libraw_nikon_makernotes_t', imgdataPath: 'imgdata.makernotes.nikon' },
+  { key: 'makernotes.sony', cTypeName: 'libraw_sony_info_t', imgdataPath: 'imgdata.makernotes.sony' },
+  { key: 'makernotes.fuji', cTypeName: 'libraw_fuji_info_t', imgdataPath: 'imgdata.makernotes.fuji' },
+  { key: 'makernotes.olympus', cTypeName: 'libraw_olympus_makernotes_t', imgdataPath: 'imgdata.makernotes.olympus' },
+  { key: 'makernotes.panasonic', cTypeName: 'libraw_panasonic_makernotes_t', imgdataPath: 'imgdata.makernotes.panasonic' },
+  { key: 'makernotes.pentax', cTypeName: 'libraw_pentax_makernotes_t', imgdataPath: 'imgdata.makernotes.pentax' },
+  { key: 'makernotes.samsung', cTypeName: 'libraw_samsung_makernotes_t', imgdataPath: 'imgdata.makernotes.samsung' },
+  { key: 'makernotes.kodak', cTypeName: 'libraw_kodak_makernotes_t', imgdataPath: 'imgdata.makernotes.kodak' },
+  // LibRaw's own field name for this one is `phaseone`, not `p1` -- see the
+  // header comment above.
+  { key: 'makernotes.p1', cTypeName: 'libraw_p1_makernotes_t', imgdataPath: 'imgdata.makernotes.phaseone' },
+  { key: 'makernotes.hasselblad', cTypeName: 'libraw_hasselblad_makernotes_t', imgdataPath: 'imgdata.makernotes.hasselblad' },
+  { key: 'makernotes.ricoh', cTypeName: 'libraw_ricoh_makernotes_t', imgdataPath: 'imgdata.makernotes.ricoh' },
 ];
 
 // A field's baseType is a reference to another struct this generator must
