@@ -7,8 +7,17 @@
 // +OpenMP) and exposes its module-level static surface: version(),
 // versionNumber(), capabilities(), cameraCount(), cameraList(), and
 // buildInfo (from the configure-time generated build_info.h). None of these
-// need a LibRaw *instance* -- Processor (Napi::ObjectWrap around
-// std::unique_ptr<LibRaw>) is T06 scope.
+// need a LibRaw *instance*.
+//
+// T06 adds Processor (Napi::ObjectWrap around std::unique_ptr<LibRaw>,
+// src/processor.cc) and a shared error-name table generated from
+// libraw_const.h (scripts/gen-errors.js, src/errors.cc); decodeSync below
+// now sources its error names from that generated table via
+// libraw_node::ThrowLegacyLibRawError/CheckLegacyLibRaw instead of the
+// hand-written switch T04 added, but keeps its JS-visible error shape
+// unchanged (a plain Error with a string `code` property) since
+// test/decode-sync.test.ts already asserts that shape and decodeSync isn't
+// rebuilt on the new Processor/LibRawError model until T08.
 #include <napi.h>
 
 // Must match the defines raw_r (LibRaw's static library target) was compiled
@@ -21,71 +30,10 @@
 #include <string>
 
 #include "build_info.h"
+#include "errors.h"
+#include "processor.h"
 
 namespace {
-
-// Maps a LibRaw error code (enum LibRaw_errors, libraw_const.h) to its C
-// enumerator name, for the thrown Error's `code` property. T06 replaces this
-// with a table generated from libraw_const.h (scripts/gen-errors.js); T04
-// only needs decodeSync's own three call sites covered, so the short list
-// here is hand-written and only needs to include LibRaw_errors.
-const char* LibRawErrorName(int code) {
-  switch (code) {
-    case LIBRAW_SUCCESS:
-      return "LIBRAW_SUCCESS";
-    case LIBRAW_UNSPECIFIED_ERROR:
-      return "LIBRAW_UNSPECIFIED_ERROR";
-    case LIBRAW_FILE_UNSUPPORTED:
-      return "LIBRAW_FILE_UNSUPPORTED";
-    case LIBRAW_REQUEST_FOR_NONEXISTENT_IMAGE:
-      return "LIBRAW_REQUEST_FOR_NONEXISTENT_IMAGE";
-    case LIBRAW_OUT_OF_ORDER_CALL:
-      return "LIBRAW_OUT_OF_ORDER_CALL";
-    case LIBRAW_NO_THUMBNAIL:
-      return "LIBRAW_NO_THUMBNAIL";
-    case LIBRAW_UNSUPPORTED_THUMBNAIL:
-      return "LIBRAW_UNSUPPORTED_THUMBNAIL";
-    case LIBRAW_INPUT_CLOSED:
-      return "LIBRAW_INPUT_CLOSED";
-    case LIBRAW_NOT_IMPLEMENTED:
-      return "LIBRAW_NOT_IMPLEMENTED";
-    case LIBRAW_REQUEST_FOR_NONEXISTENT_THUMBNAIL:
-      return "LIBRAW_REQUEST_FOR_NONEXISTENT_THUMBNAIL";
-    case LIBRAW_UNSUFFICIENT_MEMORY:
-      return "LIBRAW_UNSUFFICIENT_MEMORY";
-    case LIBRAW_DATA_ERROR:
-      return "LIBRAW_DATA_ERROR";
-    case LIBRAW_IO_ERROR:
-      return "LIBRAW_IO_ERROR";
-    case LIBRAW_CANCELLED_BY_CALLBACK:
-      return "LIBRAW_CANCELLED_BY_CALLBACK";
-    case LIBRAW_BAD_CROP:
-      return "LIBRAW_BAD_CROP";
-    case LIBRAW_TOO_BIG:
-      return "LIBRAW_TOO_BIG";
-    case LIBRAW_MEMPOOL_OVERFLOW:
-      return "LIBRAW_MEMPOOL_OVERFLOW";
-    default:
-      return "LIBRAW_UNSPECIFIED_ERROR";
-  }
-}
-
-// Throws a JS Error whose `message` is libraw_strerror(rc)'s text (prefixed
-// with the failing stage name) and whose `code` property is the LIBRAW_*
-// enum name, matching T04's task text ("Map LibRaw error codes to a thrown
-// Error with code = the LibRaw error name").
-void ThrowLibRawError(Napi::Env env, int rc, const char* stage) {
-  std::string message = std::string(stage) + ": " + LibRaw::strerror(rc);
-  Napi::Error err = Napi::Error::New(env, message);
-  err.Set("code", Napi::String::New(env, LibRawErrorName(rc)));
-  throw err;
-}
-
-void CheckLibRaw(Napi::Env env, int rc, const char* stage) {
-  if (rc != LIBRAW_SUCCESS) {
-    ThrowLibRawError(env, rc, stage);
-  }
-}
 
 Napi::Object MakeBuildInfo(Napi::Env env) {
   namespace bi = libraw_node::build_info;
@@ -104,6 +52,22 @@ Napi::Object MakeBuildInfo(Napi::Env env) {
 class LibRawAddon : public Napi::Addon<LibRawAddon> {
  public:
   LibRawAddon(Napi::Env env, Napi::Object exports) {
+    // Processor's constructor Function is created once per Env (LibRawAddon
+    // itself is per-Env instance data under Napi::Addon<T> -- see
+    // NODE_API_ADDON(LibRawAddon) below), then exported as "Processor" and
+    // also kept alive here as a member Napi::FunctionReference so a future
+    // task (T08's fused helpers) can construct Processor instances from C++
+    // without going through JS. This is deliberately a per-instance member,
+    // not a `static Napi::FunctionReference`: a static/global reference
+    // would be shared across every Env this addon is loaded into (multiple
+    // worker_threads, multiple Electron renderer/utility contexts), which
+    // either crashes or leaks across isolates. Napi::Addon<T> already gives
+    // every Env its own LibRawAddon instance, so a plain member field here
+    // is already context-aware for free.
+    Napi::Function processorCtor = libraw_node::Processor::DefineClass(env);
+    processorCtor_ = Napi::Persistent(processorCtor);
+    processorCtor_.SuppressDestruct();
+
     DefineAddon(exports,
                 {
                     InstanceMethod("hello", &LibRawAddon::Hello),
@@ -119,10 +83,13 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
                     InstanceMethod("cameraList", &LibRawAddon::CameraList),
                     InstanceValue("buildInfo", MakeBuildInfo(env)),
                     InstanceMethod("decodeSync", &LibRawAddon::DecodeSync),
+                    InstanceValue("Processor", processorCtor),
                 });
   }
 
  private:
+  Napi::FunctionReference processorCtor_;
+
   Napi::Value Hello(const Napi::CallbackInfo& info) {
     return Napi::String::New(info.Env(), "ok");
   }
@@ -211,11 +178,11 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
 
     using clock = std::chrono::steady_clock;
     auto t0 = clock::now();
-    CheckLibRaw(env, raw->open_buffer(input.Data(), input.Length()), "open_buffer");
+    libraw_node::CheckLegacyLibRaw(env, raw->open_buffer(input.Data(), input.Length()), "open_buffer");
     auto t1 = clock::now();
-    CheckLibRaw(env, raw->unpack(), "unpack");
+    libraw_node::CheckLegacyLibRaw(env, raw->unpack(), "unpack");
     auto t2 = clock::now();
-    CheckLibRaw(env, raw->dcraw_process(), "dcraw_process");
+    libraw_node::CheckLegacyLibRaw(env, raw->dcraw_process(), "dcraw_process");
     auto t3 = clock::now();
 
     int width = 0, height = 0, colors = 0, bps = 0;
@@ -229,7 +196,7 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
     auto t4 = clock::now();
     if (copyRc != LIBRAW_SUCCESS) {
       raw->recycle();
-      ThrowLibRawError(env, copyRc, "copy_mem_image");
+      libraw_node::ThrowLegacyLibRawError(env, copyRc, "copy_mem_image");
     }
 
     raw->recycle();

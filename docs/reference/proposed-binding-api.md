@@ -36,7 +36,7 @@ raw.params = { ...partial }                         // setter validates & assign
 await raw.process({ signal?, onProgress? })         // dcraw_process (re-callable after params change)
 await raw.image({ output? })                        // copy_mem_image into V8 buffer
 await raw.writePpmTiff(path); await raw.writeThumb(path);
-raw.errorCount; raw.warnings; raw.decoderInfo; raw.isFujiRotated(); raw.color(row, col);
+raw.errorCount(); raw.warnings; raw.decoderInfo(); raw.isFujiRotated(); raw.color(row, col);
 raw.abort();                                         // setCancelFlag on the in-flight worker
 raw.recycle(); raw.close();                          // recycle(); close() also frees the object
 
@@ -55,3 +55,12 @@ Rules:
   libjpeg-turbo JPEG encode for thumbnails.
 - Parameter keys are LibRaw's C names. A generated `docs/params.md` and `.d.ts` come from a JSON manifest
   of `libraw_output_params_t` and `libraw_raw_unpack_params_t`.
+
+> **Correction (T06):** the class here is called `Processor`, not `LibRaw` (the `LibRaw` name in this
+> sketch collides with the vendored C++ class it wraps). All zero-argument introspection calls
+> (`errorCount`, `decoderInfo`, `unpackFunctionName`, `isFujiRotated`, `isSraw`, `isNikonSraw`,
+> `isCoolscanNef`, `isJpegThumb`, `isFloatingPoint`, `haveFpData`, `srawMidpoint`) are implemented as
+> methods (`raw.errorCount()`, not `raw.errorCount`), not accessors -- consistent with the two-argument
+> and optional-argument members in the same group (`color(row, col)`, `thumbOK(maxsz?)`) and with the
+> native `Napi::ObjectWrap` exposing every one of them as an `InstanceMethod`. `raw.metadata`/`raw.thumbs`/
+> `raw.warnings` (true data, not LibRaw method calls) remain properties once implemented (T08/T14a).

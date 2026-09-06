@@ -229,7 +229,10 @@ message(STATUS "node-addon-api include dir: ${NAPI_INC}")
 message(STATUS "node-api-headers include dir: ${NODE_API_HEADERS_INC}")
 message(STATUS "LIBRAW_NODE_OPENMP: ${LIBRAW_NODE_OPENMP}")
 
-add_library(addon SHARED src/addon.cc)
+add_library(addon SHARED
+  src/addon.cc
+  src/errors.cc
+  src/processor.cc)
 set_target_properties(addon PROPERTIES
   PREFIX ""
   SUFFIX ".node"

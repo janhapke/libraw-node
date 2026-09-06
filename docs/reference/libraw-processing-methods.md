@@ -1,12 +1,19 @@
 # LibRaw processing methods (C++ API surface)
 
 Public methods of `class LibRaw` as declared in `libraw/libraw.h` (0.21.5 headers on this machine; 0.22
-adds no removals relevant here). Return type `int` means a `LIBRAW_*` error code (`LIBRAW_SUCCESS` = 0;
-negative = fatal, e.g. `LIBRAW_UNSUFFICIENT_MEMORY`, `LIBRAW_DATA_ERROR`, `LIBRAW_IO_ERROR`,
-`LIBRAW_CANCELLED_BY_CALLBACK`, `LIBRAW_BAD_CROP`, `LIBRAW_TOO_BIG`, `LIBRAW_MEMPOOL_OVERFLOW`; positive =
-errno-style non-fatal such as `LIBRAW_FILE_UNSUPPORTED`, `LIBRAW_REQUEST_FOR_NONEXISTENT_IMAGE`,
-`LIBRAW_OUT_OF_ORDER_CALL`, `LIBRAW_NO_THUMBNAIL`, `LIBRAW_UNSUPPORTED_THUMBNAIL`, `LIBRAW_INPUT_CLOSED`,
-`LIBRAW_NOT_IMPLEMENTED`).
+adds no removals relevant here). Return type `int` means a `LIBRAW_*` error code (`LIBRAW_SUCCESS` = 0).
+
+> **Correction (T06, checked against the vendored 0.22.2 `libraw/libraw_const.h`):** every non-success
+> `LibRaw_errors` enumerator is negative, not just a "fatal" subset -- `LIBRAW_UNSPECIFIED_ERROR` (-1)
+> through `LIBRAW_REQUEST_FOR_NONEXISTENT_THUMBNAIL` (-9), then `LIBRAW_UNSUFFICIENT_MEMORY` (-100007)
+> through `LIBRAW_MEMPOOL_OVERFLOW` (-100013). There is no positive/errno-style range in this enum
+> (`LIBRAW_FILE_UNSUPPORTED`, `LIBRAW_REQUEST_FOR_NONEXISTENT_IMAGE`, `LIBRAW_OUT_OF_ORDER_CALL`,
+> `LIBRAW_NO_THUMBNAIL`, `LIBRAW_UNSUPPORTED_THUMBNAIL`, `LIBRAW_INPUT_CLOSED`, `LIBRAW_NOT_IMPLEMENTED` are
+> all negative too, just closer to zero). "Fatal" is instead a distinct, narrower notion the header defines
+> via `#define LIBRAW_FATAL_ERROR(ec) ((ec) < -100000)` -- true only for the `-100007..-100013` group
+> above, false for `-1..-9` despite those also being negative. `scripts/gen-errors.js` (T06) generates the
+> full name/value table from this header for both the C++ and JS sides, so the binding's error names never
+> drift from it regardless of this prose.
 
 ## Input
 

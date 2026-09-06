@@ -71,12 +71,20 @@ Two mechanisms, use both:
 - `Processor::abort()` (JS thread) sets `cancelRequested_ = true` **and** calls `raw_->setCancelFlag()`.
   `setCancelFlag()` flips an atomic that LibRaw's decoders and demosaic loops poll via `checkCancel()`,
   throwing `LIBRAW_EXCEPTION_CANCELLED_BY_CALLBACK` internally; the current stage returns
-  `LIBRAW_CANCELLED_BY_CALLBACK` (-8).
+  `LIBRAW_CANCELLED_BY_CALLBACK` (-100010, not -8 -- see the T06 correction below).
 - The progress callback's return value cancels between stages for code paths that don't poll the flag.
 
 Map `AbortSignal`: in JS, `signal.addEventListener('abort', () => native.abort(), { once: true })`; reject
-with an `AbortError`-compatible `LibRawError` (`code: 'ABORT_ERR'`, LibRaw code -8). Clear the flag
+with an `AbortError`-compatible `LibRawError` (`code: 'ABORT_ERR'`, LibRaw code -100010). Clear the flag
 (`clearCancelFlag()`) in `OnOK`/`OnError` before the next job.
+
+> **Correction (T06):** `LIBRAW_CANCELLED_BY_CALLBACK` is **-100010** in the vendored 0.22.2
+> `libraw/libraw_const.h` (`enum LibRaw_errors`), not -8 (-8 is `LIBRAW_NOT_IMPLEMENTED`). This doc's two
+> mentions of "-8" above were wrong; `docs/plan/tasks.md`'s T09 acceptance text ("code === -8") has the
+> same error and should be corrected when T09 is implemented.
+> `scripts/gen-errors.js` (T06, `src/errors.cc` / `lib/generated/libraw-errors.cjs`) generates the
+> authoritative code/name table from that header, so this is not just a one-off typo fix -- any future
+> hand-written `LIBRAW_*` numeric literal in this repo's docs or code should be checked against it.
 
 Latency: LibRaw checks the flag per row/tile in most decoders; expect abort to land within tens of
 milliseconds during `unpack`/`dcraw_process`, longer inside a single stage that does not poll (e.g. some
