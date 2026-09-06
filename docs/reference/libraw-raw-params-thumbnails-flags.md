@@ -7,9 +7,9 @@ Decode-stage options, consulted by `open_*` and `unpack()`; must be set **before
 
 | Field | Type | Meaning | Default |
 |---|---|---|---|
-| `use_rawspeed` | int | Use RawSpeed if compiled in | 0 |
-| `use_dngsdk` | int | 0 no, 1 special DNGs only, 2 all DNGs (needs Adobe SDK) | 1 |
-| `options` | unsigned | Bitmask of `LIBRAW_RAWOPTIONS_*` (below) | 0 |
+| `use_rawspeed` | int | Bitmask of `LibRaw_rawspeed_bits_t` (`LIBRAW_RAWSPEEDV1_USE`/`_FAILONUNKNOWN`/`_IGNOREERRORS`, `LIBRAW_RAWSPEEDV3_*`); use RawSpeed if compiled in | `LIBRAW_RAWSPEEDV1_USE` (1) |
+| `use_dngsdk` | int | Bitmask of `LibRaw_dng_processing` (`LIBRAW_DNG_FLOAT`/`_LINEAR`/`_DEFLATE`/`_XTRANS`/`_OTHER`/`_8BIT`) selecting which DNG variants use the Adobe SDK, if compiled in — **not** a 0/1/2 scale (older LibRaw docs describe that scheme, but 0.22.2's header and `dngsdk_glue.cpp`'s bit tests confirm it is this bitmask) | `LIBRAW_DNG_DEFAULT` = `FLOAT\|LINEAR\|DEFLATE\|8BIT` = 39 |
+| `options` | unsigned | Bitmask of `LIBRAW_RAWOPTIONS_*` (below) | `LIBRAW_RAWOPTIONS_CONVERTFLOAT_TO_INT` (2) |
 | `shot_select` | unsigned | Frame index in multi-frame files (`idata.raw_count`) | 0 |
 | `specials` | unsigned | `LIBRAW_RAWSPECIAL_SONYARW2_*` (posterisation handling), `_NODP2Q_INTERPOLATERG/_INTERPOLATEAF` | 0 |
 | `max_raw_memory_mb` | unsigned | Refuse files needing more than this (`LIBRAW_TOO_BIG`) | 2048 |

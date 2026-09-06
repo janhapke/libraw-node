@@ -2,15 +2,17 @@
 
 Postprocessing knobs read by `dcraw_process()` (and `raw2image*` for `half_size`/crop). Names are the C
 field names; a binding should keep them verbatim (snake_case) so LibRaw's docs apply. Defaults are LibRaw's
-own (set in `LibRaw::LibRaw()`); verify against the vendored version's `libraw_cxx.cpp` when generating
-docs — in particular `use_camera_wb` (set it explicitly in the binding's defaults).
+own (set in `LibRaw::LibRaw()`); verify against the vendored version's constructor when generating docs — in
+0.22.2 that's `vendor/LibRaw/src/utils/init_close_utils.cpp`, not `libraw_cxx.cpp` (removed/split up in this
+release) — in particular `use_camera_wb`, which the constructor does not set explicitly (see the table
+below): the binding should decide its own default rather than relying on LibRaw's.
 
 | Field | Type | Meaning | Values / default |
 |---|---|---|---|
-| `greybox[4]` | unsigned | Area (x, y, w, h) used for `use_auto_wb` | 0 = whole image |
-| `cropbox[4]` | unsigned | Crop (x, y, w, h) applied in `raw2image`, before rotation | 0 = none |
+| `greybox[4]` | unsigned | Area (x, y, w, h) used for `use_auto_wb` | `{0,0,UINT_MAX,UINT_MAX}` = whole image |
+| `cropbox[4]` | unsigned | Crop (x, y, w, h) applied in `raw2image`, before rotation | `{0,0,UINT_MAX,UINT_MAX}` = none |
 | `aber[4]` | double | Chromatic aberration: `aber[0]` red scale, `aber[2]` blue scale | 1.0 |
-| `gamm[6]` | double | Gamma curve: `gamm[0]` = 1/γ, `gamm[1]` = toe slope (0 → pure power) | sRGB: 1/2.4, 12.92 |
+| `gamm[6]` | double | Gamma curve: `gamm[0]` = 1/γ, `gamm[1]` = toe slope (0 → pure power) | rec. BT.709: 1/2.222 (0.45), 4.5 (not sRGB — set `gamm[0]=1/2.4, gamm[1]=12.92` for that) |
 | `user_mul[4]` | float | Manual WB multipliers (R, G, B, G2); non-zero enables | 0 |
 | `bright` | float | Brightness multiplier | 1.0 |
 | `threshold` | float | Wavelet denoise threshold (dcraw `-n`), 100–1000 typical | 0 = off |
@@ -18,7 +20,7 @@ docs — in particular `use_camera_wb` (set it explicitly in the binding's defau
 | `four_color_rgb` | int | Interpolate the two greens separately | 0 |
 | `highlight` | int | 0 clip, 1 unclip (leave), 2 blend, 3–9 rebuild with level | 0 |
 | `use_auto_wb` | int | Average-the-image WB | 0 |
-| `use_camera_wb` | int | As-shot WB from `cam_mul` (falls back to daylight if absent; see `LIBRAW_RAWOPTIONS_CAMERAWB_FALLBACK_TO_DAYLIGHT`) | check default |
+| `use_camera_wb` | int | As-shot WB from `cam_mul` (falls back to daylight if absent; see `LIBRAW_RAWOPTIONS_CAMERAWB_FALLBACK_TO_DAYLIGHT`) | 0 (never explicitly set by `LibRaw::LibRaw()`; zeroed like the rest of `imgdata`) |
 | `use_camera_matrix` | int | 0 never, 1 use camera colour matrix if `use_camera_wb` (default), 3 always | 1 |
 | `output_color` | int | 0 raw, 1 sRGB, 2 Adobe RGB, 3 Wide Gamut, 4 ProPhoto, 5 XYZ, 6 ACES, 7 DCI-P3, 8 Rec2020 | 1 |
 | `output_profile` | char* | ICC output profile path (needs LCMS2) | NULL |
@@ -31,15 +33,15 @@ docs — in particular `use_camera_wb` (set it explicitly in the binding's defau
 | `user_flip` | int | -1 use file's orientation, 0 none, 3 = 180°, 5 = 90° CCW, 6 = 90° CW | -1 |
 | `user_qual` | int | Demosaic: 0 linear, 1 VNG, 2 PPG, 3 AHD, 4 DCB, 11 DHT, 12 modified AHD (AAHD); 5–10 need GPL packs, fall back to AHD with `LIBRAW_WARN_FALLBACK_TO_AHD` | -1 (→ AHD) |
 | `user_black` | int | Override black level | -1 |
-| `user_cblack[4]` | int | Per-channel black adjustment | 0 |
+| `user_cblack[4]` | int | Per-channel black adjustment | `{-1000001,-1000001,-1000001,-1000001}` (any value ≤ -1000000 means unset) |
 | `user_sat` | int | Override saturation (white) level | -1 |
 | `med_passes` | int | 3×3 median filter passes after demosaic | 0 |
 | `auto_bright_thr` | float | Fraction of pixels allowed to clip in auto-brightness | 0.01 |
 | `adjust_maximum_thr` | float | Auto-adjust maximum if data max < this × maximum; 0 disables | 0.75 |
 | `no_auto_bright` | int | Disable auto-brightness (dcraw `-W`) | 0 |
-| `use_fuji_rotate` | int | Rotate 45° X-Trans/SuperCCD: -1 default, 0 off, 1 on | -1 |
+| `use_fuji_rotate` | int | Rotate 45° X-Trans/SuperCCD; every call site only tests truthiness, so any non-zero value behaves like 1 | 1 (not -1: `LibRaw::LibRaw()` sets it to 1; LibRaw's own `API-datastruct.html` contradicts itself on this default) |
 | `green_matching` | int | Fix green channel imbalance | 0 |
-| `dcb_iterations` | int | DCB correction passes; -1 off | -1 |
+| `dcb_iterations` | int | DCB correction passes (only meaningful with `user_qual=4`) | 0 (LibRaw's own `API-datastruct.html` says -1, but `LibRaw::LibRaw()` never sets this field, so it is zeroed like everything else in `imgdata`) |
 | `dcb_enhance_fl` | int | DCB colour enhance | 0 |
 | `fbdd_noiserd` | int | FBDD noise reduction before demosaic: 0 off, 1 light, 2 full | 0 |
 | `exp_correc` | int | Enable exposure correction | 0 |

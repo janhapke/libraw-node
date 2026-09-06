@@ -1,0 +1,545 @@
+{
+  "generator": "scripts/gen-manifest.js",
+  "libraw": {
+    "version": "0.22.2",
+    "major": 0,
+    "minor": 22,
+    "patch": 2
+  },
+  "source": "vendor/LibRaw/libraw/libraw_types.h",
+  "structs": {
+    "params": {
+      "cType": "libraw_output_params_t",
+      "imgdataPath": "imgdata.params",
+      "fieldOrder": [
+        "greybox",
+        "cropbox",
+        "aber",
+        "gamm",
+        "user_mul",
+        "bright",
+        "threshold",
+        "half_size",
+        "four_color_rgb",
+        "highlight",
+        "use_auto_wb",
+        "use_camera_wb",
+        "use_camera_matrix",
+        "output_color",
+        "output_profile",
+        "camera_profile",
+        "bad_pixels",
+        "dark_frame",
+        "output_bps",
+        "output_tiff",
+        "output_flags",
+        "user_flip",
+        "user_qual",
+        "user_black",
+        "user_cblack",
+        "user_sat",
+        "med_passes",
+        "auto_bright_thr",
+        "adjust_maximum_thr",
+        "no_auto_bright",
+        "use_fuji_rotate",
+        "use_p1_correction",
+        "green_matching",
+        "dcb_iterations",
+        "dcb_enhance_fl",
+        "fbdd_noiserd",
+        "exp_correc",
+        "exp_shift",
+        "exp_preser",
+        "no_auto_scale",
+        "no_interpolation"
+      ],
+      "fields": {
+        "greybox": {
+          "doc": "Area (x, y, w, h), in raw pixels, averaged for use_auto_wb. -A in dcraw.",
+          "type": "uint[]",
+          "default": [
+            0,
+            0,
+            4294967295,
+            4294967295
+          ],
+          "notes": "Default is {0,0,UINT_MAX,UINT_MAX} (the whole image), not all-zero -- verified in LibRaw::LibRaw().",
+          "cType": "unsigned",
+          "cArrayLength": 4
+        },
+        "cropbox": {
+          "doc": "Crop rectangle (x, y, w, h), in raw pixels, applied in raw2image before rotation.",
+          "type": "uint[]",
+          "default": [
+            0,
+            0,
+            4294967295,
+            4294967295
+          ],
+          "notes": "Default is {0,0,UINT_MAX,UINT_MAX} (no crop), not all-zero -- verified in LibRaw::LibRaw().",
+          "cType": "unsigned",
+          "cArrayLength": 4
+        },
+        "aber": {
+          "doc": "Chromatic aberration correction multipliers. Only aber[0] (red) and aber[2] (blue) are used; can affect raw data reading since it changes output size. -C in dcraw.",
+          "type": "float[]",
+          "default": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "cType": "double",
+          "cArrayLength": 4
+        },
+        "gamm": {
+          "doc": "Output gamma curve: gamm[0] = 1/power, gamm[1] = toe slope (0 for a pure power curve); gamm[2..5] are filled in by LibRaw. -g power toe_slope in dcraw.",
+          "type": "float[]",
+          "default": [
+            0.45,
+            4.5,
+            0,
+            0,
+            0,
+            0
+          ],
+          "notes": "Default is rec. BT.709 (power 2.222, i.e. gamm[0]=1/2.222=0.45, toe slope 4.5), not sRGB -- verified in LibRaw::LibRaw(). For an sRGB curve set gamm[0]=1/2.4, gamm[1]=12.92; for linear, set both to 1.0.",
+          "cType": "double",
+          "cArrayLength": 6
+        },
+        "user_mul": {
+          "doc": "Manual white-balance multipliers (R, G, B, G2); non-zero values enable manual WB. -r mul0 mul1 mul2 mul3 in dcraw.",
+          "type": "float[]",
+          "default": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "cType": "float",
+          "cArrayLength": 4
+        },
+        "bright": {
+          "doc": "Brightness multiplier applied in scale_colors/auto-bright. -b in dcraw.",
+          "type": "float",
+          "default": 1,
+          "cType": "float"
+        },
+        "threshold": {
+          "doc": "Wavelet denoise threshold; 0 disables, typical useful range 100-1000. -n in dcraw.",
+          "type": "float",
+          "default": 0,
+          "min": 0,
+          "cType": "float"
+        },
+        "half_size": {
+          "doc": "2x2 binning, no demosaic; output is half size. Can affect raw data reading for some formats. -h in dcraw.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "four_color_rgb": {
+          "doc": "Interpolate the two green channels of a Bayer image separately instead of averaging them. -f in dcraw.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "highlight": {
+          "doc": "Highlight recovery mode: 0 clip, 1 unclip (leave), 2 blend, 3-9 rebuild (higher = more aggressive reconstruction). -H in dcraw.",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 9,
+          "cType": "int"
+        },
+        "use_auto_wb": {
+          "doc": "Use white balance averaged over the whole image (or the greybox area). -a in dcraw.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "use_camera_wb": {
+          "doc": "Use the as-shot white balance from the camera (cam_mul) if available. Falls back to auto-WB, or to daylight WB if LIBRAW_RAWOPTIONS_CAMERAWB_FALLBACK_TO_DAYLIGHT is set in rawparams.options. -w in dcraw.",
+          "type": "bool",
+          "default": false,
+          "notes": "The vendored reference doc's row for this field previously said \"check default\" as a placeholder; the constructor never sets it, so it is 0/false like every other field zeroed by ZERO(imgdata).",
+          "cType": "int"
+        },
+        "use_camera_matrix": {
+          "doc": "Use the embedded camera color matrix.",
+          "type": "enum",
+          "default": 1,
+          "enum": {
+            "NEVER": 0,
+            "IF_CAMERA_WB": 1,
+            "ALWAYS": 3
+          },
+          "notes": "1 (default): use for DNG files always, for other files only when use_camera_wb is set. 3: use regardless of white-balance setting. +M/-M in dcraw.",
+          "cType": "int"
+        },
+        "output_color": {
+          "doc": "Output color space: 0 raw, 1 sRGB, 2 Adobe RGB, 3 Wide Gamut RGB, 4 ProPhoto RGB, 5 XYZ, 6 ACES, 7 DCI-P3, 8 Rec. 2020. -o in dcraw.",
+          "type": "enum",
+          "default": 1,
+          "enum": {
+            "RAW": 0,
+            "SRGB": 1,
+            "ADOBE": 2,
+            "WIDE": 3,
+            "PROPHOTO": 4,
+            "XYZ": 5,
+            "ACES": 6,
+            "DCI_P3": 7,
+            "REC2020": 8
+          },
+          "cType": "int"
+        },
+        "output_profile": {
+          "doc": "Path to an ICC output profile file. Only used when LibRaw was built with LCMS2 support. -o filename in dcraw.",
+          "type": "string",
+          "default": null,
+          "cType": "char*"
+        },
+        "camera_profile": {
+          "doc": "Path to an ICC input (camera) profile file, or the literal string \"embed\" to use the file's embedded profile. Only used when LibRaw was built with LCMS2 support. -p file in dcraw.",
+          "type": "string",
+          "default": null,
+          "cType": "char*"
+        },
+        "bad_pixels": {
+          "doc": "Path to a dcraw-format bad-pixel map file. -P file in dcraw.",
+          "type": "string",
+          "default": null,
+          "cType": "char*"
+        },
+        "dark_frame": {
+          "doc": "Path to a 16-bit PGM dark-frame file. -K file in dcraw.",
+          "type": "string",
+          "default": null,
+          "cType": "char*"
+        },
+        "output_bps": {
+          "doc": "Output bits per sample.",
+          "type": "enum",
+          "default": 8,
+          "enum": {
+            "8": 8,
+            "16": 16
+          },
+          "notes": "-4 in dcraw selects 16.",
+          "cType": "int"
+        },
+        "output_tiff": {
+          "doc": "Write TIFF instead of PPM/PGM from dcraw_ppm_tiff_writer. -T in dcraw.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "output_flags": {
+          "doc": "Bitfield of output-file options.",
+          "type": "flags",
+          "default": 0,
+          "flags": {
+            "LIBRAW_OUTPUT_FLAGS_NONE": 0,
+            "LIBRAW_OUTPUT_FLAGS_PPMMETA": 1
+          },
+          "notes": "PPMMETA writes additional metadata into PPM/PGM output files.",
+          "cType": "int"
+        },
+        "user_flip": {
+          "doc": "Flip/rotate the output image. -1 uses the value from the raw file (the default); 0 none, 3 180 degrees, 5 90 degrees CCW, 6 90 degrees CW; the full 0-7 range is accepted (dcraw-style flip/rotate bit combinations). Can affect raw data reading for some formats (e.g. Kodak thumbnail unpacking). -t in dcraw.",
+          "type": "int",
+          "default": -1,
+          "min": -1,
+          "max": 7,
+          "cType": "int"
+        },
+        "user_qual": {
+          "doc": "Demosaic algorithm: 0 linear, 1 VNG, 2 PPG, 3 AHD, 4 DCB, 11 DHT, 12 modified AHD (AAHD). 5-10 are GPL-pack algorithms not built into LibRaw and fall back to AHD with warning LIBRAW_WARN_FALLBACK_TO_AHD. -q in dcraw.",
+          "type": "enum",
+          "default": -1,
+          "enum": {
+            "LINEAR": 0,
+            "VNG": 1,
+            "PPG": 2,
+            "AHD": 3,
+            "DCB": 4,
+            "DHT": 11,
+            "AAHD": 12
+          },
+          "notes": "Default -1 selects AHD (3) at process time.",
+          "cType": "int"
+        },
+        "user_black": {
+          "doc": "Override black level for all channels; -1 uses the value LibRaw determined from the raw file. -k in dcraw.",
+          "type": "int",
+          "default": -1,
+          "cType": "int"
+        },
+        "user_cblack": {
+          "doc": "Per-channel correction to user_black/the detected black level.",
+          "type": "int[]",
+          "default": [
+            -1000001,
+            -1000001,
+            -1000001,
+            -1000001
+          ],
+          "notes": "Default is {-1000001,-1000001,-1000001,-1000001} (LibRaw treats any value <= -1000000 as unset), not 0 -- verified in LibRaw::LibRaw() and utils_libraw.cpp's `if (O.user_cblack[i] > -1000000)` check.",
+          "cType": "int",
+          "cArrayLength": 4
+        },
+        "user_sat": {
+          "doc": "Override saturation (white) level; -1 uses the value LibRaw determined from the raw file. -S in dcraw.",
+          "type": "int",
+          "default": -1,
+          "cType": "int"
+        },
+        "med_passes": {
+          "doc": "Number of 3x3 median filter passes applied after demosaic. -m in dcraw.",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "cType": "int"
+        },
+        "auto_bright_thr": {
+          "doc": "Fraction of pixels allowed to clip when no_auto_bright is off.",
+          "type": "float",
+          "default": 0.01,
+          "min": 0,
+          "notes": "0.01 (1%) matches dcraw. For modern low-noise multi-megapixel cameras, values in the 0.00003-0.001 range are often more appropriate.",
+          "cType": "float"
+        },
+        "adjust_maximum_thr": {
+          "doc": "Auto-adjusts the maximum data value from real channel_maximum[] data if the calculated maximum is at least this fraction of the nominal maximum; 0 disables the adjustment.",
+          "type": "float",
+          "default": 0.75,
+          "min": 0,
+          "max": 1,
+          "cType": "float"
+        },
+        "no_auto_bright": {
+          "doc": "Disable automatic brightness increase by histogram. -W in dcraw.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "use_fuji_rotate": {
+          "doc": "Rotate Fuji Super-CCD / X-Trans images back to their natural 45-degree orientation. -j in dcraw.",
+          "type": "bool",
+          "default": true,
+          "notes": "The vendored reference doc previously listed the default as -1 (matching only one of two contradictory statements in LibRaw's own API-datastruct.html); the constructor sets it to 1, and every use site (mem_image.cpp, dcraw_process.cpp, utils_libraw.cpp) only tests truthiness, so any non-zero value behaves the same as 1. Modeled here as bool; 0 disables rotation.",
+          "cType": "int"
+        },
+        "use_p1_correction": {
+          "doc": "Apply Phase One compressed-file corrections (linearization etc.) when non-zero (the default).",
+          "type": "bool",
+          "default": true,
+          "cType": "int"
+        },
+        "green_matching": {
+          "doc": "Fix a green-channel imbalance between the two green subpixels as an extra postprocessing pass. Requires additional memory.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "dcb_iterations": {
+          "doc": "Number of DCB demosaic correction passes; only meaningful with user_qual=4 (DCB).",
+          "type": "int",
+          "default": 0,
+          "notes": "LibRaw's own API-datastruct.html says the default is -1 (\"no correction\"), but LibRaw::LibRaw() never sets this field, so it is 0 like every other field zeroed by ZERO(imgdata) -- verified in init_close_utils.cpp and postprocessing/dcraw_process.cpp's `if (O.dcb_iterations >= 0) iterations = O.dcb_iterations;` (0 overrides the DCB routine's own internal -1 default).",
+          "cType": "int"
+        },
+        "dcb_enhance_fl": {
+          "doc": "Enhance interpolated colors during DCB demosaic (user_qual=4).",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "fbdd_noiserd": {
+          "doc": "FBDD noise reduction applied before demosaic: 0 off, 1 light, 2 (and higher) full.",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "cType": "int"
+        },
+        "exp_correc": {
+          "doc": "Enable exposure correction (exp_shift/exp_preser) before demosaic.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "exp_shift": {
+          "doc": "Exposure correction multiplier, linear scale. Usable range 0.25 (2-stop darken) to 8.0 (3-stop lighten). Only applied when exp_correc is set.",
+          "type": "float",
+          "default": 1,
+          "min": 0.25,
+          "max": 8,
+          "cType": "float"
+        },
+        "exp_preser": {
+          "doc": "Highlight preservation when lightening via exp_shift > 1. 0.0 no preservation, 1.0 full preservation. Only applied when exp_correc is set.",
+          "type": "float",
+          "default": 0,
+          "min": 0,
+          "max": 1,
+          "cType": "float"
+        },
+        "no_auto_scale": {
+          "doc": "Skip scale_colors() in dcraw_process() (no white balance, no black/white normalization). White balance is applied in scale_colors(), so skipping it yields an unbalanced image; intended for use with no_interpolation or a custom interpolation callback.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        },
+        "no_interpolation": {
+          "doc": "Skip the demosaic step in dcraw_process(); output stays as a 4-channel mosaic.",
+          "type": "bool",
+          "default": false,
+          "cType": "int"
+        }
+      }
+    },
+    "rawparams": {
+      "cType": "libraw_raw_unpack_params_t",
+      "imgdataPath": "imgdata.rawparams",
+      "fieldOrder": [
+        "use_rawspeed",
+        "use_dngsdk",
+        "options",
+        "shot_select",
+        "specials",
+        "max_raw_memory_mb",
+        "sony_arw2_posterization_thr",
+        "coolscan_nef_gamma",
+        "p4shot_order",
+        "custom_camera_strings"
+      ],
+      "fields": {
+        "use_rawspeed": {
+          "doc": "Controls use of the RawSpeed library for raw data unpacking (only if LibRaw was built with RawSpeed support).",
+          "type": "flags",
+          "default": 1,
+          "flags": {
+            "LIBRAW_RAWSPEEDV1_USE": 1,
+            "LIBRAW_RAWSPEEDV1_FAILONUNKNOWN": 2,
+            "LIBRAW_RAWSPEEDV1_IGNOREERRORS": 4,
+            "LIBRAW_RAWSPEEDV3_USE": 256,
+            "LIBRAW_RAWSPEEDV3_FAILONUNKNOWN": 512,
+            "LIBRAW_RAWSPEEDV3_IGNOREERRORS": 1024
+          },
+          "notes": "Default is LIBRAW_RAWSPEEDV1_USE (1) -- verified in LibRaw::LibRaw(). Bits are LibRaw_rawspeed_bits_t (libraw_const.h); use is gated further by whether LibRaw was compiled with RawSpeed/RawSpeed3 support.",
+          "cType": "int"
+        },
+        "use_dngsdk": {
+          "doc": "Controls use of the Adobe DNG SDK for specific DNG variants (only if LibRaw was built with DNG SDK support and a DNG host is set).",
+          "type": "flags",
+          "default": 39,
+          "flags": {
+            "LIBRAW_DNG_FLOAT": 1,
+            "LIBRAW_DNG_LINEAR": 2,
+            "LIBRAW_DNG_DEFLATE": 4,
+            "LIBRAW_DNG_XTRANS": 8,
+            "LIBRAW_DNG_OTHER": 16,
+            "LIBRAW_DNG_8BIT": 32
+          },
+          "notes": "Default is LIBRAW_DNG_DEFAULT = FLOAT|LINEAR|DEFLATE|8BIT (1+2+4+32=39) -- verified in LibRaw::LibRaw(). LibRaw's own API-datastruct.html describes an older 0/1/2 scheme for this field under the name use_dng_sdk; the compiled header (libraw_const.h's LibRaw_dng_processing enum) and dngsdk_glue.cpp's bit tests confirm it is this bitmask, and the struct field is spelled use_dngsdk.",
+          "cType": "int"
+        },
+        "options": {
+          "doc": "Bitfield of format-specific unpack()-phase processing options.",
+          "type": "flags",
+          "default": 2,
+          "flags": {
+            "LIBRAW_RAWOPTIONS_PENTAX_PS_ALLFRAMES": 1,
+            "LIBRAW_RAWOPTIONS_CONVERTFLOAT_TO_INT": 2,
+            "LIBRAW_RAWOPTIONS_ARQ_SKIP_CHANNEL_SWAP": 4,
+            "LIBRAW_RAWOPTIONS_NO_ROTATE_FOR_KODAK_THUMBNAILS": 8,
+            "LIBRAW_RAWOPTIONS_USE_PPM16_THUMBS": 32,
+            "LIBRAW_RAWOPTIONS_DONT_CHECK_DNG_ILLUMINANT": 64,
+            "LIBRAW_RAWOPTIONS_DNGSDK_ZEROCOPY": 128,
+            "LIBRAW_RAWOPTIONS_ZEROFILTERS_FOR_MONOCHROMETIFFS": 256,
+            "LIBRAW_RAWOPTIONS_DNG_ADD_ENHANCED": 512,
+            "LIBRAW_RAWOPTIONS_DNG_ADD_PREVIEWS": 1024,
+            "LIBRAW_RAWOPTIONS_DNG_PREFER_LARGEST_IMAGE": 2048,
+            "LIBRAW_RAWOPTIONS_DNG_STAGE2": 4096,
+            "LIBRAW_RAWOPTIONS_DNG_STAGE3": 8192,
+            "LIBRAW_RAWOPTIONS_DNG_ALLOWSIZECHANGE": 16384,
+            "LIBRAW_RAWOPTIONS_DNG_DISABLEWBADJUST": 32768,
+            "LIBRAW_RAWOPTIONS_PROVIDE_NONSTANDARD_WB": 65536,
+            "LIBRAW_RAWOPTIONS_CAMERAWB_FALLBACK_TO_DAYLIGHT": 131072,
+            "LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_KNOWN_VENDORS": 262144,
+            "LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_ALL_VENDORS": 524288,
+            "LIBRAW_RAWOPTIONS_DNG_STAGE2_IFPRESENT": 1048576,
+            "LIBRAW_RAWOPTIONS_DNG_STAGE3_IFPRESENT": 2097152,
+            "LIBRAW_RAWOPTIONS_DNG_ADD_MASKS": 4194304,
+            "LIBRAW_RAWOPTIONS_CANON_IGNORE_MAKERNOTES_ROTATION": 8388608,
+            "LIBRAW_RAWOPTIONS_ALLOW_JPEGXL_PREVIEWS": 16777216,
+            "LIBRAW_RAWOPTIONS_CANON_CHECK_CAMERA_AUTO_ROTATION_MODE": 67108864,
+            "LIBRAW_RAWOPTIONS_DNG_STAGE23_IFPRESENT_JPGJXL": 134217728
+          },
+          "notes": "Default is LIBRAW_RAWOPTIONS_CONVERTFLOAT_TO_INT (2) -- verified in LibRaw::LibRaw(). Bits are LibRaw_processing_options (libraw_const.h); this generator/task refers to that family of flags as LIBRAW_RAWOPTIONS_* per its naming convention. T12 accepts either the raw bitmask number or an array of these flag names for this field; T13 exports the flag table to api/enums.json.",
+          "cType": "unsigned"
+        },
+        "shot_select": {
+          "doc": "Select which embedded image to process, for formats that store several raw images per file (e.g. multi-shot Pentax, Sony sequences). -s in dcraw.",
+          "type": "uint",
+          "default": 0,
+          "cType": "unsigned"
+        },
+        "specials": {
+          "doc": "Special unpack-phase processing mode bits (e.g. Sony ARW2 delta handling, DP2 Quattro RG/AF interpolation, sRAW RGB/interpolation skipping).",
+          "type": "flags",
+          "default": 0,
+          "flags": {
+            "LIBRAW_RAWSPECIAL_SONYARW2_NONE": 0,
+            "LIBRAW_RAWSPECIAL_SONYARW2_BASEONLY": 1,
+            "LIBRAW_RAWSPECIAL_SONYARW2_DELTAONLY": 2,
+            "LIBRAW_RAWSPECIAL_SONYARW2_DELTAZEROBASE": 4,
+            "LIBRAW_RAWSPECIAL_SONYARW2_DELTATOVALUE": 8,
+            "LIBRAW_RAWSPECIAL_NODP2Q_INTERPOLATERG": 16,
+            "LIBRAW_RAWSPECIAL_NODP2Q_INTERPOLATEAF": 32,
+            "LIBRAW_RAWSPECIAL_SRAW_NO_RGB": 64,
+            "LIBRAW_RAWSPECIAL_SRAW_NO_INTERPOLATE": 128
+          },
+          "notes": "Bits are LibRaw_rawspecial_t (libraw_const.h). If LIBRAW_RAWSPECIAL_SONYARW2_DELTATOVALUE is set, sony_arw2_posterization_thr sets the shadow posterization suppression level.",
+          "cType": "unsigned"
+        },
+        "max_raw_memory_mb": {
+          "doc": "Abort processing if the raw data buffer would grow larger than this many megabytes.",
+          "type": "uint",
+          "default": 2048,
+          "notes": "Default is LIBRAW_MAX_ALLOC_MB_DEFAULT (2048).",
+          "cType": "unsigned"
+        },
+        "sony_arw2_posterization_thr": {
+          "doc": "Shadow posterization-suppression level used when specials includes LIBRAW_RAWSPECIAL_SONYARW2_DELTATOVALUE.",
+          "type": "int",
+          "default": 0,
+          "cType": "int"
+        },
+        "coolscan_nef_gamma": {
+          "doc": "Gamma value applied when decoding Nikon Coolscan NEF files; LibRaw cannot determine this from the file, so the application must set it explicitly if needed.",
+          "type": "float",
+          "default": 1,
+          "cType": "float"
+        },
+        "p4shot_order": {
+          "doc": "Shot order string for Pentax 4-shot pixel-shift files.",
+          "type": "string",
+          "default": "3102",
+          "notes": "Fixed-size char[5] buffer (4 digits + NUL) in the header, exposed as a string; any value assigned must be at most 4 characters.",
+          "cType": "char",
+          "cArrayLength": 5
+        },
+        "custom_camera_strings": {
+          "doc": "Application-supplied list of additional camera-identification strings, terminated by a NULL entry, in LibRaw's internal adobe_coeff table format.",
+          "type": "unsupported",
+          "default": null,
+          "notes": "char** (pointer to an application-owned, NULL-terminated array of C strings). Not settable through the generated params table: exposing it safely means owning and outliving an array of allocations for the life of the Processor, which is a design decision left to T12 (or explicit exclusion) rather than this manifest. Default is NULL.",
+          "cType": "char**"
+        }
+      }
+    }
+  }
+}
