@@ -32,6 +32,23 @@ describe('decodeSync — synthetic PM5544 DNG', () => {
         expect(img.data.length).toBe(768 * 576 * 3);
     });
 
+    it('reports per-stage timings when stages: true (T05)', () => {
+        const buf = readFileSync(SYNTHETIC_DNG_PATH);
+        const img = libraw.decodeSync(buf, { stages: true }) as DecodedImage & {
+            stages: { open: number; unpack: number; process: number; copy: number };
+        };
+
+        expect(img.stages).toBeTypeOf('object');
+        for (const key of ['open', 'unpack', 'process', 'copy'] as const) {
+            expect(img.stages[key], `stages.${key}`).toBeTypeOf('number');
+            expect(img.stages[key], `stages.${key} >= 0`).toBeGreaterThanOrEqual(0);
+        }
+
+        // Without stages: true (or with it omitted/false), no stages key leaks in.
+        const plain = libraw.decodeSync(buf, {}) as DecodedImage & { stages?: unknown };
+        expect(plain.stages).toBeUndefined();
+    });
+
     it('demosaics half_size to 384x288', () => {
         const buf = readFileSync(SYNTHETIC_DNG_PATH);
         const img: DecodedImage = libraw.decodeSync(buf, { half_size: true });

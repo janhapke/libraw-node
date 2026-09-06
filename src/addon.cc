@@ -16,6 +16,7 @@
 // (struct layouts in libraw_types.h depend on USE_ZLIB/USE_JPEG/USE_JPEG8).
 #include <libraw/libraw.h>
 
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -155,14 +156,23 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
     return arr;
   }
 
-  // decodeSync(buffer, { half_size?, user_qual?, use_camera_wb? }) ->
-  // { width, height, colors, bits, data }. One LibRaw instance per call
-  // (T06 introduces the long-lived Processor wrapper); pipeline is
+  // decodeSync(buffer, { half_size?, user_qual?, use_camera_wb?, stages? }) ->
+  // { width, height, colors, bits, data, stages? }. One LibRaw instance per
+  // call (T06 introduces the long-lived Processor wrapper); pipeline is
   // open_buffer -> unpack -> dcraw_process -> get_mem_image_format ->
   // V8-allocated Buffer -> copy_mem_image -> recycle, per the tutorial and
   // T04's task text. The output buffer is always a fresh V8 allocation
   // (never LibRaw's own memory / an external buffer), which is what keeps
   // this Electron-safe under NODE_API_NO_EXTERNAL_BUFFERS_ALLOWED.
+  //
+  // T05: when `stages: true` is passed, each of the four pipeline calls is
+  // timed individually with std::chrono::steady_clock (monotonic, immune to
+  // wall-clock adjustments -- matters for a benchmarking tool) and the result
+  // gains a `stages: { open, unpack, process, copy }` object of millisecond
+  // durations (double, sub-millisecond precision kept for the fast stages).
+  // get_mem_image_format is not separately timed: it does no decoding work
+  // (just reads sizes already computed by dcraw_process) and the task's
+  // stage list is open/unpack/process/copy.
   Napi::Value DecodeSync(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
 
@@ -174,6 +184,7 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
     bool halfSize = false;
     int userQual = -1;      // -1 means "leave LibRaw's default"
     bool useCameraWb = true;  // matches the tutorial's default
+    bool wantStages = false;
 
     if (info.Length() > 1 && info[1].IsObject()) {
       Napi::Object opts = info[1].As<Napi::Object>();
@@ -186,6 +197,9 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
       if (opts.Has("use_camera_wb") && !opts.Get("use_camera_wb").IsUndefined()) {
         useCameraWb = opts.Get("use_camera_wb").ToBoolean();
       }
+      if (opts.Has("stages") && !opts.Get("stages").IsUndefined()) {
+        wantStages = opts.Get("stages").ToBoolean();
+      }
     }
 
     auto raw = std::make_unique<LibRaw>();
@@ -195,9 +209,14 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
       raw->imgdata.params.user_qual = userQual;
     }
 
+    using clock = std::chrono::steady_clock;
+    auto t0 = clock::now();
     CheckLibRaw(env, raw->open_buffer(input.Data(), input.Length()), "open_buffer");
+    auto t1 = clock::now();
     CheckLibRaw(env, raw->unpack(), "unpack");
+    auto t2 = clock::now();
     CheckLibRaw(env, raw->dcraw_process(), "dcraw_process");
+    auto t3 = clock::now();
 
     int width = 0, height = 0, colors = 0, bps = 0;
     raw->get_mem_image_format(&width, &height, &colors, &bps);
@@ -207,6 +226,7 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
 
     Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::New(env, size);
     int copyRc = raw->copy_mem_image(out.Data(), static_cast<int>(stride), 0);
+    auto t4 = clock::now();
     if (copyRc != LIBRAW_SUCCESS) {
       raw->recycle();
       ThrowLibRawError(env, copyRc, "copy_mem_image");
@@ -220,6 +240,19 @@ class LibRawAddon : public Napi::Addon<LibRawAddon> {
     result.Set("colors", colors);
     result.Set("bits", bps);
     result.Set("data", out);
+
+    if (wantStages) {
+      auto ms = [](clock::time_point a, clock::time_point b) {
+        return std::chrono::duration<double, std::milli>(b - a).count();
+      };
+      Napi::Object stages = Napi::Object::New(env);
+      stages.Set("open", Napi::Number::New(env, ms(t0, t1)));
+      stages.Set("unpack", Napi::Number::New(env, ms(t1, t2)));
+      stages.Set("process", Napi::Number::New(env, ms(t2, t3)));
+      stages.Set("copy", Napi::Number::New(env, ms(t3, t4)));
+      result.Set("stages", stages);
+    }
+
     return result;
   }
 };
