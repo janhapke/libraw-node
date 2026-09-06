@@ -8,7 +8,7 @@
 // abort into -- the synthetic DNG's ~5-20 ms unpack does not reliably give
 // that, so those tests are gated on LIBRAW_TEST_IMAGES (IMGP5127.DNG: unpack
 // ~420 ms, process ~160 ms per docs/plan/tasks.md's T09 section).
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import libraw from '../lib/index.cjs';
 import { SYNTHETIC_DNG_PATH, realImagePath, realTestImagesDir } from './helpers/fixtures';
@@ -28,6 +28,20 @@ function expectCancelledError(err: unknown) {
 }
 
 describe('cancellation — pre-aborted signal rejects immediately, without touching LibRaw', () => {
+    // Warm up the JS wrappers once so the latency assertions below measure the
+    // steady-state path, not first-call module/JIT costs (seen at 5.3 ms once
+    // while Docker builds ran concurrently on the same host).
+    beforeAll(async () => {
+        const controller = new AbortController();
+        controller.abort();
+        await libraw.decode(freshBuffer(), { signal: controller.signal }).catch(() => {});
+        await libraw.thumbnail(freshBuffer(), { signal: controller.signal }).catch(() => {});
+        const p = new libraw.Processor();
+        p.openBufferSync(freshBuffer());
+        await p.unpack({ signal: controller.signal }).catch(() => {});
+        p.close();
+    });
+
     it('decode() rejects in well under 5 ms', async () => {
         const controller = new AbortController();
         controller.abort();
