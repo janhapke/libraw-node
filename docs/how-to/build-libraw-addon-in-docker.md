@@ -55,9 +55,29 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 # vendored deps, all static
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)      # zlib 1.3.x option names vary; check the version
 add_subdirectory(vendor/zlib EXCLUDE_FROM_ALL)
-set(ENABLE_SHARED OFF CACHE BOOL "" FORCE)
-set(WITH_TURBOJPEG OFF CACHE BOOL "" FORCE)
-add_subdirectory(vendor/libjpeg-turbo EXCLUDE_FROM_ALL)
+
+# libjpeg-turbo CANNOT be add_subdirectory'd (verified in T03): its own
+# CMakeLists.txt hard-fails with "cannot be integrated into another build
+# system using add_subdirectory(). Use ExternalProject_Add() instead"
+# whenever CMAKE_SOURCE_DIR != CMAKE_CURRENT_SOURCE_DIR. Build it as a nested
+# CMake project via ExternalProject_Add and wrap the resulting archive as an
+# IMPORTED target instead (see the real CMakeLists.txt for the full version,
+# including the add_dependencies() needed so generated headers exist before
+# raw_r's sources compile):
+include(ExternalProject)
+set(LIBJPEG_TURBO_BINARY_DIR ${CMAKE_BINARY_DIR}/vendor/libjpeg-turbo)
+ExternalProject_Add(libjpeg_turbo_ext
+  SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendor/libjpeg-turbo
+  BINARY_DIR ${LIBJPEG_TURBO_BINARY_DIR}
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+             -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_JPEG8=ON
+             -DWITH_TURBOJPEG=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF -DWITH_SIMD=ON
+  BUILD_COMMAND ${CMAKE_COMMAND} --build ${LIBJPEG_TURBO_BINARY_DIR} --target jpeg-static
+  INSTALL_COMMAND ""
+  BUILD_BYPRODUCTS ${LIBJPEG_TURBO_BINARY_DIR}/libjpeg.a)
+add_library(jpeg-static STATIC IMPORTED GLOBAL)
+set_target_properties(jpeg-static PROPERTIES IMPORTED_LOCATION ${LIBJPEG_TURBO_BINARY_DIR}/libjpeg.a)
+add_dependencies(jpeg-static libjpeg_turbo_ext)
 
 # LibRaw: compile the sources directly (Makefile.dist lists src/{decoders,decompressors,demosaic,
 # integration,metadata,postprocessing,preprocessing,tables,utils,write,x3f}/*.cpp + libraw_c_api/datastream)

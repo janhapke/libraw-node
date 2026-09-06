@@ -13,12 +13,14 @@
 #
 # Exits non-zero if:
 #   - NEEDED contains anything other than libc/libm/libpthread/libdl/ld-linux
+#   - NEEDED contains libgomp, libjpeg or libz (T03: LibRaw, libjpeg-turbo and
+#     zlib must be linked statically; OpenMP uses the static-libgomp link
+#     documented in scripts/spike-static-libraw.sh and CMakeLists.txt) --
+#     already covered by the allowlist above but checked and reported
+#     separately for a clearer failure message
 #   - any exported dynamic symbol other than napi_register_module_v1 and
 #     node_api_module_get_api_version_v1 exists
 #   - the highest referenced GLIBC_ version is greater than 2.28
-#
-# T03 extends this script to also reject libgomp/libjpeg/libz in NEEDED
-# (those must be linked statically once LibRaw is wired in).
 set -euo pipefail
 
 FILE="${1:?usage: check-binary.sh <file>}"
@@ -68,6 +70,19 @@ BAD_NEEDED="$(printf '%s\n' "$NEEDED" | sed '/^$/d' | grep -vE "$ALLOWED_NEEDED_
 if [ -n "$BAD_NEEDED" ]; then
   echo "FAIL: unexpected NEEDED entries (only libc/libm/libpthread/libdl/ld-linux allowed):" >&2
   printf '%s\n' "$BAD_NEEDED" >&2
+  status=1
+fi
+
+# --- Rule 1b: static-link gate (T03) --------------------------------------
+# LibRaw, libjpeg-turbo and zlib must be compiled into the addon statically;
+# named explicitly (rather than relying only on the allowlist above) so a
+# regression here reports exactly which vendored dependency leaked out as a
+# dynamic dependency instead of a generic "unexpected NEEDED" message.
+STATIC_ONLY_RE='(^|/)lib(gomp|jpeg|z)\.so(\.[0-9]+)?$'
+BAD_STATIC="$(printf '%s\n' "$NEEDED" | sed '/^$/d' | grep -E "$STATIC_ONLY_RE" || true)"
+if [ -n "$BAD_STATIC" ]; then
+  echo "FAIL: libgomp/libjpeg/libz must be linked statically, found in NEEDED:" >&2
+  printf '%s\n' "$BAD_STATIC" >&2
   status=1
 fi
 
