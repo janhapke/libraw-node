@@ -38,7 +38,8 @@
     "gen:docs": "node scripts/gen-docs.js",
     "gen": "npm run gen:errors && npm run gen:progress && npm run gen:enums && npm run gen:manifest && npm run gen:params-cc && npm run gen:metadata && npm run gen:metadata-cc && npm run gen:types && npm run gen:docs",
     "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-enums.js --check && node scripts/gen-manifest.js --check && node scripts/gen-params-cc.js --check && node scripts/gen-metadata.js --check && node scripts/gen-metadata-cc.js --check && node scripts/gen-types.js --check && node scripts/gen-docs.js --check",
-    "test": "vitest run --reporter=verbose"
+    "test": "vitest run --reporter=verbose",
+    "test:stress": "NODE_OPTIONS=--expose-gc vitest run --config vitest.stress.config.mts --reporter=verbose"
   },
   "dependencies": {
     "@types/node": "^24.13.3",

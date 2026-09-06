@@ -218,6 +218,47 @@ package never `require`s `sharp` — it is an optional peer dependency
 `<S extends (input: Buffer, options?) => any>(sharp: S) => ReturnType<S>`, not sharp's own types. See
 `docs/how-to/integrate-into-photoview.md` ("Sharp interop") for the full rationale.
 
+## Concurrency and threads
+
+`decode`, `identify`, and `thumbnail` each run one fused `Napi::AsyncWorker` job on libuv's threadpool;
+every call opens and owns its own LibRaw instance for the duration of that call, so any number of calls
+can run truly concurrently — there is no shared LibRaw state between them (T17's stress test,
+`test/stress.test.ts`, exercises this directly: 6 `worker_threads` each firing 50 concurrent `decode()`
+calls, with every result's checksum verified against a single-threaded reference).
+
+- **libuv threadpool size.** Node's threadpool defaults to **4** threads (`UV_THREADPOOL_SIZE`, up to
+  1024 — see `docs/how-to/implement-async-decode-with-cancellation.md`). More than 4 concurrent
+  `decode`/`identify`/`thumbnail` calls (or `Processor` async calls) queue
+  behind that limit rather than truly overlapping. `UV_THREADPOOL_SIZE` must be set in the environment
+  **before Node's first async call that uses the threadpool** — setting `process.env.UV_THREADPOOL_SIZE`
+  from JS after startup has no effect, since libuv reads it once when the pool is first created. Under
+  Electron, set it before `app.whenReady()` in the main process (or before the addon is first used in a
+  utility process) — see `docs/how-to/make-the-addon-electron-safe.md`.
+- **`Processor` is single-job-at-a-time.** A second async call on the same `Processor` instance while one
+  is already in flight rejects immediately with a `LibRawError` named `ERR_LIBRAW_BUSY` (a synchronous
+  accessor called during that window throws the same) — it does not queue. Run more `Processor` instances
+  (or use the stateless `decode`/`identify`/`thumbnail` helpers, which need no such guard since each owns
+  its own instance) for concurrent work.
+- **OpenMP threads inside `dcraw_process`.** Independently of libuv, LibRaw's own demosaic step parallelises
+  with OpenMP (`buildInfo.openmp`); by default each concurrent decode spins up its own OpenMP thread pool
+  sized to the host's core count. Running several decodes in parallel therefore **multiplies** thread
+  count: total OS threads in flight ≈ (libuv threadpool size, or number of concurrent `Processor`s) ×
+  `OMP_NUM_THREADS` (host core count if unset). On a 16-core host, 4 concurrent decodes at the OpenMP
+  default already means up to 64 threads contending for 16 cores — oversubscription that slows every
+  individual decode down without increasing overall throughput. Set `OMP_NUM_THREADS` explicitly (e.g. to
+  `cores / threadpool-size`, or `1` to let libuv-level concurrency be the only parallelism) when running
+  many decodes side by side; like `UV_THREADPOOL_SIZE`, it must be set in the process environment before
+  the addon's first decode (see the comment in `test/helpers/processor-progress-subprocess.cjs` — once
+  libgomp's pool exists, changing `process.env.OMP_NUM_THREADS` from JS no longer has any effect).
+- **Memory per in-flight decode.** Each concurrent `decode()`/`Processor` pipeline holds the still-packed
+  RAW buffer, LibRaw's internal unpacked sensor data, and the processed output buffer simultaneously at
+  points during the pipeline — roughly **3–4× the final output buffer's size** per job (e.g. a
+  4950×3284×3-byte ~48 MB RGB output implies on the order of 150–200 MB of peak resident memory for that
+  one decode). Budget accordingly when choosing how many decodes to run at once: `RAM ≈ concurrency ×
+  4 × expected_output_bytes`, plus per-thread OpenMP overhead. `test/stress.test.ts` measures RSS growth
+  across 300 decodes (6 workers × 50 each) directly — see that file for the methodology (`npm run
+  test:stress`).
+
 ## Building from source
 
 Prebuilt binaries cover the platforms in `docs/reference/build-matrix.md`. To build the native addon
@@ -246,6 +287,16 @@ LIBRAW_TEST_IMAGES=/path/to/raw/files npm test
 ```
 
 On this development machine, `/home/jan/dev/photoview/.private/testimages` is a valid value.
+
+`npm run test:stress` (`test/stress.test.ts`, `vitest.stress.config.mts`) runs the T17 concurrency/memory
+stress suite — 6 `worker_threads` × 50 `decode()` calls each against a real RAW file, checksum-verified
+against a single-threaded reference, with an RSS-growth assertion. It needs `LIBRAW_TEST_IMAGES`, takes
+several minutes, and is excluded from the default `npm test` run (`vitest.config.mts`) for that reason —
+see the [Concurrency and threads](#concurrency-and-threads) section above:
+
+```bash
+LIBRAW_TEST_IMAGES=/path/to/raw/files npm run test:stress
+```
 
 ## License
 
