@@ -10,8 +10,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-linux-x64:
-    runs-on: ubuntu-24.04
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runs-on: ubuntu-24.04
+          - arch: arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,18 +36,26 @@ jobs:
 
       - run: npm run gen:check
 
-      - run: ./scripts/build-linux.sh x64
+      - run: ./scripts/build-linux.sh ${{ matrix.arch }}
 
-      - run: ./scripts/check-binary.sh prebuilds/linux-x64/node.napi.node
+      - run: ./scripts/check-binary.sh prebuilds/linux-${{ matrix.arch }}/node.napi.node
 
       - uses: actions/upload-artifact@v4
         with:
-          name: prebuilds-linux-x64
-          path: prebuilds/linux-x64
+          name: prebuilds-linux-${{ matrix.arch }}
+          path: prebuilds/linux-${{ matrix.arch }}
 
-  test-linux-x64:
-    needs: build-linux-x64
-    runs-on: ubuntu-24.04
+  test-linux:
+    needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runs-on: ubuntu-24.04
+          - arch: arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,12 +70,12 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: prebuilds-linux-x64
-          path: prebuilds/linux-x64
+          name: prebuilds-linux-${{ matrix.arch }}
+          path: prebuilds/linux-${{ matrix.arch }}
 
       - run: npm test
 
-      - run: ./scripts/check-binary.sh prebuilds/linux-x64/node.napi.node
+      - run: ./scripts/check-binary.sh prebuilds/linux-${{ matrix.arch }}/node.napi.node
 
       - name: Typecheck consumer-ts example against published types
         run: |

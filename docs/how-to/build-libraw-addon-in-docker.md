@@ -10,7 +10,8 @@ libraw-node/
   CMakeLists.txt            # addon + vendored libs
   cmake/
     napi.map                # version script: export only napi_register_module_v1
-    toolchain-aarch64.cmake # cross toolchain for linux-arm64
+                             # (no cross-toolchain file: T19 found no viable Rocky-hosted
+                             # aarch64 cross toolchain -- see §6)
   src/                      # addon sources (node-addon-api)
   vendor/
     LibRaw-0.22.2/          # git submodule at tag 0.22.2, or unpacked tarball (pinned SHA in scripts/versions.env)
@@ -28,18 +29,23 @@ libraw-node/
 
 ```dockerfile
 FROM rockylinux/rockylinux:8-ubi-init
+ARG TARGETARCH   # BuildKit auto arg: amd64 | arm64, set by `docker buildx build --platform ...`
 RUN dnf install -y epel-release dnf-plugins-core && dnf config-manager --set-enabled powertools && \
-    dnf install -y gcc-toolset-14-gcc-c++ make cmake git python3.12 tar xz nasm && \
-    dnf install -y gcc-toolset-14-gcc-c++-aarch64-linux-gnu || true   # arm64 cross, if available
+    dnf install -y gcc-toolset-14-gcc-c++ make cmake git python3.12 tar xz \
+      $( [ "$TARGETARCH" = "amd64" ] && echo nasm )   # nasm is x86-only; NEON on arm64 needs no assembler
 ENV PATH="/opt/rh/gcc-toolset-14/root/usr/bin:$PATH"
 ARG NODE_VERSION=24.0.0
-RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+RUN NODE_ARCH="$( [ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64 )" && \
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
     | tar xJC /usr/local --strip-components=1
 WORKDIR /work
 ```
 
 Rocky 8 gives glibc 2.28, the same floor `sharp` and `@janhapke/sharp-electron` ship with. `nasm` lives in the `powertools` (CRB) repo, which must be enabled first (verified in T00). `nasm` is for
-libjpeg-turbo's SIMD.
+libjpeg-turbo's SIMD. There is no `gcc-toolset-14-gcc-c++-aarch64-linux-gnu` cross package to install on
+Rocky 8 at all -- see §6, this Dockerfile instead gets built once per target platform via
+`docker buildx build --platform linux/amd64` / `linux/arm64`, and `dnf install` inside each pulls that
+platform's *native* `gcc-toolset-14-gcc-c++` package (with a matching sysroot, by construction).
 
 ## 3. CMakeLists.txt sketch
 
@@ -131,30 +137,27 @@ cross build does not need Node inside the container beyond the headers.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ARCH=${1:-x64}
+case "$ARCH" in
+  x64) PLATFORM=linux/amd64 ;;
+  arm64) PLATFORM=linux/arm64 ;;
+esac
 source scripts/versions.env
-docker build -f scripts/linux-build.Dockerfile --build-arg NODE_VERSION="$NODE_TARGET" -t libraw-node-build scripts/
-TOOLCHAIN=""
-[ "$ARCH" = arm64 ] && TOOLCHAIN="-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-aarch64.cmake"
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" libraw-node-build sh -c "
-  npm ci --ignore-scripts &&
-  cmake -S . -B build/linux-$ARCH -DCMAKE_BUILD_TYPE=Release $TOOLCHAIN &&
-  cmake --build build/linux-$ARCH -j\$(nproc) &&
-  mkdir -p prebuilds/linux-$ARCH && cp build/linux-$ARCH/node.napi.node prebuilds/linux-$ARCH/ &&
-  strip --strip-unneeded prebuilds/linux-$ARCH/node.napi.node"
+docker buildx build --platform "$PLATFORM" --load \
+  -f scripts/linux-build.Dockerfile --build-arg NODE_VERSION="$NODE_VERSION" \
+  -t "libraw-node-build:linux-$ARCH" scripts/
+docker run --rm --platform "$PLATFORM" -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" \
+  "libraw-node-build:linux-$ARCH" bash -c "
+    cmake -S . -B build/linux-$ARCH -DCMAKE_BUILD_TYPE=Release &&
+    cmake --build build/linux-$ARCH -j\$(nproc) &&
+    mkdir -p prebuilds/linux-$ARCH && cp build/linux-$ARCH/node.napi.node prebuilds/linux-$ARCH/ &&
+    strip --strip-unneeded prebuilds/linux-$ARCH/node.napi.node"
 ```
 
-`cmake/toolchain-aarch64.cmake`:
-
-```cmake
-set(CMAKE_SYSTEM_NAME Linux)
-set(CMAKE_SYSTEM_PROCESSOR aarch64)
-set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
-set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
-set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-```
-
-If the Rocky cross package is unavailable, fall back to `docker buildx build --platform linux/arm64` with
-QEMU (slower, ~10× for LibRaw's ~250 k lines).
+No `CMAKE_TOOLCHAIN_FILE` is involved: this is not a cross build. `--platform linux/arm64` makes BuildKit
+build and run an actual aarch64 container (native on an arm64 host/runner, under QEMU user-mode emulation
+on an x86_64 host), so CMake configures and compiles *natively* for aarch64 inside it -- gcc-toolset-14's
+compiler, sysroot and libgomp are all the real aarch64 packages, not cross artifacts. See §6 for why this
+was chosen over a cross toolchain.
 
 ## 5. Verify
 
@@ -167,3 +170,47 @@ objdump -p prebuilds/linux-x64/node.napi.node | grep NEEDED                     
 
 The two `objdump` checks are the ones `sharp-electron` learned to always run: a clean build does not prove
 symbols are hidden.
+
+## 6. arm64 (T19): cross toolchain vs. native container under QEMU/`ubuntu-24.04-arm`
+
+Two approaches were on the table, in this order of preference:
+
+**(a) Cross gcc in the Rocky 8 image** (`cmake/toolchain-aarch64.cmake` with `CMAKE_SYSTEM_NAME Linux`,
+`CMAKE_SYSTEM_PROCESSOR aarch64`, `aarch64-linux-gnu-g++`, `CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER`).
+Rejected: Rocky 8 / gcc-toolset-14 does not ship a usable aarch64 cross toolchain at all.
+
+- `gcc-toolset-14` (the SCL that supplies gcc 14 on Rocky 8) has **no** `-aarch64-linux-gnu` cross
+  sub-package in any of BaseOS/AppStream/PowerTools -- confirmed by installing it inside the pinned x64
+  image and running `dnf list available 'gcc-toolset-14*aarch64*'`, which returned nothing.
+- The only aarch64 cross compiler available anywhere in Rocky 8's repos (BaseOS/AppStream/PowerTools) plus
+  EPEL is EPEL's plain `gcc-c++-aarch64-linux-gnu` (gcc **12.1.1**, not gcc-toolset-14/gcc 14 -- a
+  different, older compiler from a different vendor stream). Installing it only pulls the compiler driver
+  and `cc1plus` (`rpm -ql gcc-c++-aarch64-linux-gnu` lists `aarch64-linux-gnu-{gcc,g++}` and the
+  `cc1plus` binary, nothing else) -- there is **no target sysroot package**: `dnf provides
+  '*aarch64-linux-gnu*glibc*'` and `dnf list available '*aarch64-linux-gnu*'` both come back empty for any
+  glibc-devel/libstdc++-devel/libgomp-devel aarch64 package. Without a target glibc + libstdc++ + libgomp,
+  a full C++ link (LibRaw needs all three) is not possible, exactly as this task's brief predicted. Per the
+  task's own instructions, this rules out (a) without hand-assembling a sysroot (explicitly out of scope).
+
+**(b) Native arm64 container, chosen.** `scripts/build-linux.sh arm64` now runs
+`docker buildx build --platform linux/arm64 --load` on the *same* `linux-build.Dockerfile`, so
+`dnf install gcc-toolset-14-gcc-c++` inside that container installs the real
+`gcc-toolset-14-gcc-c++.aarch64` package (verified present: `14.2.1-11.el8_10`, same gcc-toolset-14 version
+as the x64 build, from the same `appstream` repo) with a matching native sysroot -- no cross toolchain, no
+sysroot gap. Locally, `--platform linux/arm64` runs under QEMU user-mode emulation (registered once via
+`docker run --privileged --rm tonistiigi/binfmt --install arm64` -- a kernel binfmt-table registration
+only, no host package install); in CI, the same script runs on the `ubuntu-24.04-arm` GitHub-hosted runner,
+which is natively arm64, so no QEMU is involved there at all and the build is exactly as fast as the x64
+one. `cmake/toolchain-aarch64.cmake` was therefore never created -- there is no cross-compilation step to
+configure a toolchain file for.
+
+The Dockerfile's two arch-sensitive bits (§2) are conditioned on BuildKit's automatic `TARGETARCH` build
+arg rather than on a build script parameter, so the same `Dockerfile` serves both platforms verbatim:
+`nasm` (x86-only; libjpeg-turbo uses NEON C intrinsics on aarch64, no assembler needed) and the Node.js
+tarball URL (`-linux-x64.tar.xz` vs. `-linux-arm64.tar.xz`).
+
+`scripts/check-binary.sh` needed no changes for arm64: its `NEEDED` allowlist regex
+(`ld-linux[a-zA-Z0-9_-]*\.so(\.[0-9]+)?`) already matches `ld-linux-aarch64.so.1` as well as
+`ld-linux-x86-64.so.2`, and the host's `objdump`/`nm`/`file` (stock Ubuntu binutils, `binutils-x86-64-linux-gnu`
+package) correctly parse foreign-arch ELF files -- verified directly by copying an aarch64 `libc.so` out of
+the arm64 Rocky container and running `file`/`objdump -p`/`nm -D` on it from the x86_64 host without error.
