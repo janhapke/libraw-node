@@ -1,0 +1,32 @@
+{
+  "name": "@janhapke/libraw",
+  "version": "0.0.0",
+  "description": "General-purpose Node.js binding for LibRaw",
+  "license": "MIT",
+  "repository": "github:janhapke/libraw-node",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "lib/index.cjs",
+  "types": "types/index.d.ts",
+  "files": [
+    "lib",
+    "types",
+    "prebuilds",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:linux": "echo 'not implemented yet (see docs/plan/tasks.md T02)' && exit 1",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.9.2",
+    "node-api-headers": "^1.9.0",
+    "node-gyp-build": "^4.8.4"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}

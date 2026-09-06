@@ -1,0 +1,9 @@
+[submodule "LibRaw"]
+	path = vendor/LibRaw
+	url = https://github.com/LibRaw/LibRaw
+[submodule "zlib"]
+	path = vendor/zlib
+	url = https://github.com/madler/zlib
+[submodule "libjpeg-turbo"]
+	path = vendor/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo
