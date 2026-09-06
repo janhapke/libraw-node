@@ -500,6 +500,61 @@ Acceptance:
 - Both macOS test jobs green; `gh run view --log` shows `buildInfo.openmp` value for each and the `otool -L`
   output (paste).
 
+> **State (T20, shipped 2026-09-06): both macOS targets fully green, OpenMP on.** `buildInfo.openmp === true`
+> on both `darwin-x64` and `darwin-arm64`; the addon builds, links, passes `check-binary-macos.sh` (`otool -L`
+> shows only `/usr/lib/libc++.1.dylib` and `/usr/lib/libSystem.B.dylib`, no `libomp.dylib` sidecar; `nm -gU`
+> shows only the two napi symbols) and passes the full `npm test` suite (178/178) on both. Reaching this took
+> four CI rounds, two of which found real, previously-latent bugs (not macOS-CI flakiness):
+> 1. **Round 1 (`check-binary-macos.sh` false failure):** `add_library(addon SHARED ...)` compiles to a
+>    Mach-O `MH_DYLIB` on Apple (`-dynamiclib`), which carries an `LC_ID_DYLIB` load command (its own
+>    install name, `@rpath/node.napi.node`) that `otool -L` prints as if it were a dependency of itself.
+>    A Node addon is only ever `dlopen()`'d by absolute path and never linked against by name, so the
+>    correct Mach-O kind is `MH_BUNDLE` (what node-gyp itself produces) -- fixed by changing
+>    `add_library(addon SHARED ...)` to `add_library(addon MODULE ...)` in `CMakeLists.txt`, which CMake
+>    maps to `-bundle` on Apple (no `LC_ID_DYLIB` at all) and compiles identically to `SHARED` on
+>    ELF/PE (verified: rebuilt and retested `linux-x64` locally, 178/178 tests still passed).
+> 2. **Round 2 (silent wrong pixel output, not a link failure):** with `LIBRAW_NODE_OMP_ROOT` set to
+>    `$(brew --prefix libomp)` and `libomp.a` linked statically by absolute path, the link succeeded and
+>    `otool -L` confirmed no `libomp.dylib` sidecar -- but `npm test` failed 5/12 test files on **both**
+>    targets, every failure an all-zero (or otherwise-unwritten) pixel buffer from a full (non-`half_size`)
+>    decode. The initial suspicion, recorded here in an earlier revision of this note, was a TLS-ownership
+>    problem in the statically-linked OpenMP runtime (the same class of bug T04 found with GNU libgomp on
+>    Linux, where a statically-linked runtime's per-thread state assumes it owns the process's static TLS
+>    block, untrue once `dlopen()`'d into a bundle). **That theory was wrong**, disproved in round 3 by
+>    forcing `LIBRAW_NODE_OPENMP=OFF` outright: the exact same 5 test failures persisted with OpenMP
+>    completely out of the build, proving the bug had nothing to do with OpenMP at all.
+> 3. **Round 3 (root cause found, unrelated to OpenMP):** re-reading the round-1/2 build logs, both had
+>    logged a wall of `ld: warning: duplicate symbol '...'` lines Apple's `ld64` emits but doesn't fail on
+>    -- for exactly `LibRaw::dcraw_process()`, `scale_colors_loop`, `convert_to_rgb_loop`,
+>    `lin_interpolate_loop`, `copy_bayer`, `raw2image_start`, `fuji_rotate`, `copy_fuji_uncropped`,
+>    `dcraw_make_mem_image` and `dcraw_make_mem_thumb`. Each was defined **twice** in `libraw_r.a`: once in
+>    its real source file, and once in `vendor/LibRaw/src/{postprocessing/postprocessing_ph,preprocessing/
+>    preprocessing_ph,write/write_ph}.cpp` -- LibRaw's own "Placeholder functions to build LibRaw w/o
+>    postprocessing tools" (each file's header comment), no-op/NULL/`LIBRAW_NOT_IMPLEMENTED` stand-ins meant
+>    to *replace*, never join, the real implementations in a postprocessing-less build configuration.
+>    Diffing `vendor/LibRaw/Makefile.dist`'s `object/*.o` list against `CMakeLists.txt`'s
+>    `file(GLOB_RECURSE ... vendor/LibRaw/src/*.cpp)` confirmed these three files -- and only these three --
+>    are not part of LibRaw's own build at all; the glob picked them up anyway. GNU ld's archive resolution
+>    (Linux) only pulls an archive member to satisfy a symbol still undefined at the point it's scanned; by
+>    the alphabetical glob/archive order in this repo, every real implementation happened to already be
+>    pulled in (for some *other* symbol it defines) before its `_ph.cpp` twin was ever reached, so the stubs
+>    were silently never linked in on Linux -- no warning, no symptom, just latent risk. Apple's `ld64`
+>    instead resolves each duplicate independently by archive member index, and for five of the ten symbols
+>    (`raw2image_start`, `copy_bayer`, `scale_colors_loop`, `convert_to_rgb_loop`, `copy_fuji_uncropped`) that
+>    happened to pick the *stub*. The result: `dcraw_process()` itself resolved to the real implementation
+>    (so nothing threw), but internally it called into `raw2image_start`/`copy_bayer` (which move sensor
+>    data into the working image buffer) and `convert_to_rgb_loop` (final color conversion) -- all silently
+>    no-ops -- producing a "successful" decode of an all-zero image, while `dcraw_make_mem_thumb` (JPEG
+>    thumbnail extraction, unaffected because *its* real/stub archive-index ordering happened to favor the
+>    real one) and every fully non-demosaic path decoded correctly throughout. Fixed with one
+>    `list(FILTER LIBRAW_SOURCES EXCLUDE REGEX "/(postprocessing_ph|preprocessing_ph|write_ph)\\.cpp$")`
+>    line right after the glob, removing the duplicate symbols (and the `ld64` warnings) on every platform.
+> 4. **Round 4 (confirmation): both targets fully green with OpenMP genuinely on.** With the real bug fixed,
+>    OpenMP was re-enabled (the round-3 `LIBRAW_NODE_OPENMP=OFF` override was reverted) and `npm test` passed
+>    178/178 on both `darwin-x64` and `darwin-arm64` with `buildInfo.openmp === true` and a clean
+>    (`libomp.dylib`-free) `otool -L` -- i.e. statically linking Homebrew's `libomp.a` was never the problem;
+>    it works. T28's macOS OpenMP work is therefore no longer needed (see the note there, corrected to match).
+
 ### T21 — Windows x64 build (red: expect several CI rounds; first pass ships with OpenMP off)
 
 Read: `docs/explanation/electron-compatibility.md` §3, `docs/reference/build-matrix.md`.
@@ -623,10 +678,21 @@ the human installs it and confirms RAW folders render (the only step needing a d
 > dependency for Linux consumers (photoview's `.deb` would declare it). **Decision pending with Jan.** Until
 > then `scripts/check-binary.sh` allows `libgomp.so.1` in NEEDED.
 
-Do: revisit `buildInfo.openmp === false` platforms; macOS `libomp.a` from Homebrew or built from LLVM
-source in the job; Windows clang-cl + `libomp` static or MSVC `/openmp` with `vcomp` static if licensing
-and availability allow. Benchmark via CI-run `npm run bench` on the synthetic large DNG (add a 6000×4000
-synthetic fixture generated at test time, not committed).
+> **macOS is resolved, not in scope here (added 2026-09-06 after T20, corrected same day):** an earlier
+> revision of this note reported `buildInfo.openmp === false` on both macOS targets with a suspected static
+> OpenMP/TLS problem. That suspicion was wrong: `npm test` failures that appeared with OpenMP statically
+> linked turned out to reproduce identically with OpenMP forced off, which traced to an unrelated LibRaw
+> source-glob bug (three "placeholder"/no-op stub files shadowing real postprocessing symbols on Apple's
+> linker -- see the T20 section above for the full writeup). Once that was fixed, static `libomp.a` linking
+> worked correctly the first time it was tried against the corrected build: both `darwin-x64` and
+> `darwin-arm64` ship with `buildInfo.openmp === true` and a clean (`libomp.dylib`-free) `otool -L`. No
+> macOS follow-up is needed for this task.
+
+Do: revisit `buildInfo.openmp === false` platforms -- Windows only as of T20 (macOS shipped with
+`buildInfo.openmp === true` in T20 and needs no further work here): Windows clang-cl + `libomp` static or
+MSVC `/openmp` with `vcomp` static if licensing and availability allow. Benchmark via CI-run `npm run
+bench` on the synthetic large DNG (add a 6000×4000 synthetic fixture generated at test time, not
+committed).
 
 Acceptance: `buildInfo.openmp === true` on all five targets in CI, and the CI bench shows `user_qual 3`
 process time at least 1.5× faster than with `OMP_NUM_THREADS=1` on runners with ≥ 4 cores (paste).

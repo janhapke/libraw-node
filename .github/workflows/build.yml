@@ -82,3 +82,94 @@ jobs:
           cd examples/consumer-ts
           npm ci
           npx tsc --noEmit
+
+  # T20: macOS x64/arm64. No Docker path here (Xcode/macOS SDK use requires
+  # Apple hardware), so these run directly on the two GitHub-hosted macOS
+  # runners named in docs/reference/build-matrix.md. Both targets build,
+  # pass scripts/check-binary-macos.sh, and pass the full test suite with
+  # OpenMP statically linked (buildInfo.openmp === true) -- see
+  # docs/plan/tasks.md's T20 section for how two real bugs (an
+  # otool-visible self-reference from building the addon as a dylib instead
+  # of a bundle, and a LibRaw source-glob bug that let three placeholder/
+  # stub files shadow real symbols on Apple's linker) were found and fixed.
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-x64
+            runs-on: macos-15-intel
+          - target: darwin-arm64
+            runs-on: macos-15
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Read pinned Node version
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - run: npm run gen:check
+
+      - name: Install libomp (OpenMP runtime, keg-only) and nasm (libjpeg-turbo x64 SIMD)
+        run: |
+          brew install libomp
+          if [ "${{ matrix.target }}" = "darwin-x64" ]; then
+            brew install nasm
+          fi
+
+      - name: Resolve libomp prefix
+        run: echo "LIBRAW_NODE_OMP_ROOT=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+
+      - run: ./scripts/build-native.sh ${{ matrix.target }}
+
+      - run: otool -L prebuilds/${{ matrix.target }}/node.napi.node
+
+      - run: ./scripts/check-binary-macos.sh prebuilds/${{ matrix.target }}/node.napi.node
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.target }}
+          path: prebuilds/${{ matrix.target }}
+
+  test-macos:
+    needs: build-macos
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-x64
+            runs-on: macos-15-intel
+          - target: darwin-arm64
+            runs-on: macos-15
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned Node version
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.target }}
+          path: prebuilds/${{ matrix.target }}
+
+      - name: Print buildInfo (records openmp true/false per target in the job log)
+        run: node -e "const l=require('./lib/index.cjs');console.log(JSON.stringify(l.buildInfo))"
+
+      - run: npm test
+
+      - run: otool -L prebuilds/${{ matrix.target }}/node.napi.node

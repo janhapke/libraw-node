@@ -1,0 +1,8 @@
+# macOS exported-symbols list (T20), the -exported_symbols_list counterpart
+# of cmake/napi.map (Linux's --version-script). ld64 symbol names include the
+# platform's leading underscore for C symbols, unlike ELF's version script.
+# Keep this in sync with cmake/napi.map: both must export exactly the two
+# Node-API entry points and nothing else (scripts/check-binary-macos.sh's
+# `nm -gU` rule enforces it on the built binary).
+_napi_register_module_v1
+_node_api_module_get_api_version_v1
