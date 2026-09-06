@@ -265,7 +265,7 @@ Do:
 1. `signal` support on every async method and helper: at enqueue time, reject if already aborted; on
    abort, set an atomic flag and call `setCancelFlag()`; LibRaw's progress callback returns non-zero when
    the flag is set. Rejections are `LibRawError` with `name: 'LIBRAW_CANCELLED_BY_CALLBACK'` and
-   `code === -8`, plus a JS-visible `aborted: true`.
+   `code === -100010`, plus a JS-visible `aborted: true`.
 2. Clear the flag before each new job; `recycle()` after a cancelled fused job.
 
 Acceptance:
