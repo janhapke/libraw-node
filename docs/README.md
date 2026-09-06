@@ -44,6 +44,10 @@ describes, explanation discusses.
 
 ## Reference (facts, tables)
 
+- [Output params reference (generated)](reference/params.md)
+- [Raw-unpack params reference (generated)](reference/rawparams.md)
+- [Metadata reference (generated)](reference/metadata.md)
+- [Enums reference (generated)](reference/enums.md)
 - [LibRaw processing methods (the C++ API surface)](reference/libraw-processing-methods.md)
 - [LibRaw output parameters (`imgdata.params`)](reference/libraw-output-params.md)
 - [LibRaw raw-unpack params, thumbnail list, capability and warning flags](reference/libraw-raw-params-thumbnails-flags.md)

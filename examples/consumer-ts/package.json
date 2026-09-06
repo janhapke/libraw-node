@@ -1,0 +1,16 @@
+{
+  "name": "consumer-ts-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "T15 acceptance fixture: tsc --noEmit against @janhapke/libraw's published types (../../types/index.d.ts) via a file: dependency, exactly as a real consumer would resolve them.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@janhapke/libraw": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2"
+  }
+}
