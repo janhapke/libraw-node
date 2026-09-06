@@ -38,6 +38,40 @@
 
 import { EventEmitter } from 'node:events';
 
+// --- toSharp (T16, lib/tosharp.cjs) ------------------------------------------
+//
+// `sharp` is an optional peer dependency (see package.json's
+// `peerDependenciesMeta.sharp`) -- this package never imports sharp's own
+// types, so `toSharp` is typed structurally against whatever factory
+// function the caller's own `import sharp from 'sharp'` resolves to: `S`'s
+// return type flows through unchanged (`ReturnType<S>`, sharp's own `Sharp`
+// instance type when the caller passes the real module), and the method
+// works with any `(input: Buffer, options?) => unknown`-shaped stand-in
+// (e.g. a test mock) without this package depending on sharp's types.
+type SharpFactory = (input: Buffer, options?: any) => any;
+
+/**
+ * Turns a raw-pixel result into a `sharp()` pipeline: `sharpModule(data, {
+ * raw: { width, height, channels: colors } })`. No extra copy -- sharp/
+ * libvips wraps `data` in place (a `Uint16Array` view of the same bytes,
+ * still no copy, when `bits === 16`, e.g. from `output_bps: 16` -- sharp
+ * infers raw-input sample depth from the buffer's typed-array class, not
+ * from an option key; see lib/tosharp.cjs's header comment).
+ */
+interface ToSharpRaw {
+  toSharp<S extends SharpFactory>(sharpModule: S): ReturnType<S>;
+}
+
+/**
+ * Turns a thumbnail result into a `sharp()` pipeline: the raw path above for
+ * a `'bitmap'`/`'bitmap16'` format/type, `sharpModule(data)` (sharp decodes
+ * the JPEG itself) for `'jpeg'`, and a thrown `TypeError` for every other
+ * format (no raw pixels, not a format this helper hands to sharp).
+ */
+interface ToSharpThumbnail {
+  toSharp<S extends SharpFactory>(sharpModule: S): ReturnType<S>;
+}
+
 // One table per enum in vendor/LibRaw/libraw/libraw_const.h (api/enums.json,
 // scripts/gen-enums.js) -- `kind` is "flags" when every value is 0 or a
 // single set bit, else "enum"; `NAME_TO_VALUE`/`VALUE_TO_NAME`/
@@ -3349,7 +3383,7 @@ export interface ExifTagEvent {
 // --- result shapes ------------------------------------------------------------
 
 /** `decode()`'s resolved value (src/fused.cc's DecodeWorker::OnOK). */
-export interface DecodeResult {
+export interface DecodeResult extends ToSharpRaw {
   readonly width: number;
   readonly height: number;
   readonly colors: number;
@@ -3388,7 +3422,7 @@ export interface IdentifyResult {
 }
 
 /** The fused `thumbnail()` helper's resolved value (src/fused.cc's ThumbnailWorker::OnOK). */
-export interface ThumbnailResult {
+export interface ThumbnailResult extends ToSharpThumbnail {
   readonly format: ThumbnailResultFormat;
   readonly width: number;
   readonly height: number;
@@ -3399,7 +3433,7 @@ export interface ThumbnailResult {
 }
 
 /** `Processor#imageSync()`/`#image()`'s resolved value (src/processor.cc). */
-export interface ImageResult {
+export interface ImageResult extends ToSharpRaw {
   readonly width: number;
   readonly height: number;
   readonly colors: number;
@@ -3408,7 +3442,7 @@ export interface ImageResult {
 }
 
 /** `Processor#thumbSync()`/`#thumb()`'s resolved value (src/processor.cc). */
-export interface ThumbResult {
+export interface ThumbResult extends ToSharpThumbnail {
   readonly type: ImageFormatType;
   readonly width: number;
   readonly height: number;
