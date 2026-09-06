@@ -55,6 +55,9 @@
 
 #include <atomic>
 #include <memory>
+#include <vector>
+
+#include "events.h"
 
 namespace libraw_node {
 
@@ -110,6 +113,17 @@ class Processor : public Napi::ObjectWrap<Processor> {
   Napi::Value Color(const Napi::CallbackInfo& info);
   Napi::Value ThumbOK(const Napi::CallbackInfo& info);
 
+  // T10: not exposed as public API (no wrapper in lib/processor.cjs's
+  // METHODS/ASYNC_METHODS lists) -- called internally, as `_drainEvents()`,
+  // by lib/processor.cjs right after each async stage method's promise
+  // settles, to pull that job's buffered progress/dataError/exifTag events
+  // (src/events.h) and emit them on the Processor (an EventEmitter) before
+  // resolving/rejecting. Trivial: just converts pendingEvents_ (already
+  // populated by that job's worker, see src/async_workers.h's
+  // SettleCancelState) and clears it -- safe to call in any state, including
+  // closed_.
+  Napi::Value DrainEvents(const Napi::CallbackInfo& info);
+
   void RequireNotBusy(Napi::Env env, const char* stage);
   void RequireNotClosed(Napi::Env env, const char* stage);
   void RequireOpened(Napi::Env env, const char* stage);
@@ -146,6 +160,25 @@ class Processor : public Napi::ObjectWrap<Processor> {
   // returned LIBRAW_CANCELLED_BY_CALLBACK; cleared by ResetState() (i.e. by
   // recycle() and by a fresh openBuffer()/openFile()).
   bool needsRecycle_ = false;
+
+  // T10: true when this Processor was constructed with `{ exifTags: true }`
+  // -- gates whether ProcessorAsyncWorker::Execute() (src/async_workers.h)
+  // installs the exif-tag callback at all (set once, in the constructor;
+  // read-only afterward, so no synchronization needed even though it is
+  // read from a worker's Execute() -- see that method for why that read is
+  // safe: it happens-before via the same JS-thread Queue() call that
+  // publishes every other per-job state this class reads there too).
+  bool exifTags_ = false;
+
+  // T10: this job's buffered events (src/events.h), moved out of the async
+  // worker's JobCancelState (src/cancel.h) once the job has settled --
+  // see src/async_workers.h's SettleCancelState. Drained (and cleared) by
+  // DrainEvents()/`_drainEvents()`, called once per job by
+  // lib/processor.cjs right after each async stage method's promise
+  // settles. Not populated by the *Sync methods (T10 scopes event recording
+  // to the async path only, matching T09's cancellation support, since only
+  // async jobs get a JobCancelState/progress-callback installation at all).
+  std::vector<JobEvent> pendingEvents_;
 };
 
 }  // namespace libraw_node

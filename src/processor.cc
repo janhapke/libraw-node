@@ -22,6 +22,19 @@ unsigned int ParseFlags(const Napi::CallbackInfo& info) {
   return LIBRAW_OPTIONS_NONE;
 }
 
+// T10: `{ exifTags: true }` gates whether ProcessorAsyncWorker::Execute()
+// (src/async_workers.h) installs the exif-tag callback at all -- see
+// processor.h's exifTags_ comment.
+bool ParseExifTags(const Napi::CallbackInfo& info) {
+  if (info.Length() > 0 && info[0].IsObject()) {
+    Napi::Object opts = info[0].As<Napi::Object>();
+    if (opts.Has("exifTags") && !opts.Get("exifTags").IsUndefined()) {
+      return opts.Get("exifTags").ToBoolean();
+    }
+  }
+  return false;
+}
+
 // T09: every async stage method below takes its `{ signal? }` options object
 // as its last argument (openBuffer(buffer, opts?), unpack(opts?),
 // unpackThumb(index?, opts?), image({ into?, bgr?, stride?, signal? }), ...)
@@ -71,11 +84,15 @@ Napi::Function Processor::DefineClass(Napi::Env env) {
           InstanceMethod("srawMidpoint", &Processor::SrawMidpoint),
           InstanceMethod("color", &Processor::Color),
           InstanceMethod("thumbOK", &Processor::ThumbOK),
+          // T10: internal-only, see processor.h's DrainEvents comment.
+          InstanceMethod("_drainEvents", &Processor::DrainEvents),
       });
 }
 
 Processor::Processor(const Napi::CallbackInfo& info)
-    : ObjectWrap<Processor>(info), raw_(std::make_unique<LibRaw>(ParseFlags(info))) {}
+    : ObjectWrap<Processor>(info),
+      raw_(std::make_unique<LibRaw>(ParseFlags(info))),
+      exifTags_(ParseExifTags(info)) {}
 
 void Processor::RequireNotBusy(Napi::Env env, const char* stage) {
   if (busy_.load()) {
@@ -684,6 +701,14 @@ Napi::Value Processor::ThumbOK(const Napi::CallbackInfo& info) {
     maxsz = static_cast<INT64>(info[0].As<Napi::Number>().Int64Value());
   }
   return Napi::Number::New(env, raw_->thumbOK(maxsz));
+}
+
+// T10: see processor.h's DrainEvents comment.
+Napi::Value Processor::DrainEvents(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = EventsToArray(env, pendingEvents_);
+  pendingEvents_.clear();
+  return arr;
 }
 
 }  // namespace libraw_node

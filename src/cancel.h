@@ -54,6 +54,8 @@
 #include <atomic>
 #include <memory>
 
+#include "events.h"
+
 namespace libraw_node {
 
 // One job's cancellation state, shared between:
@@ -68,9 +70,20 @@ namespace libraw_node {
 //    holds a reference to -- is a harmless no-op instead of touching a
 //    LibRaw instance that may since be reused by a later, unrelated job on
 //    the same Processor).
+//
+// T10: also carries this job's event buffer (`events`, src/events.h) --
+// every job already constructs a fresh JobCancelState (see this struct's own
+// comment: "a new job gets a new JobCancelState for free"), so a fresh
+// JobEventBuffer for free too, and every LibRaw callback the events feature
+// needs (the progress callback -- extended below, not replaced, see
+// events.h's file comment -- plus the new data-error and exif-tag callbacks,
+// src/events.cc) already receives a JobCancelState* as its `data`/`context`
+// argument, so no second `void*` needs to be threaded through
+// set_progress_handler/set_dataerror_handler/set_exifparser_handler.
 struct JobCancelState {
   std::shared_ptr<std::atomic<bool>> flag = std::make_shared<std::atomic<bool>>(false);
   std::shared_ptr<std::atomic<bool>> active = std::make_shared<std::atomic<bool>>(true);
+  std::shared_ptr<JobEventBuffer> events = std::make_shared<JobEventBuffer>();
 };
 
 // LibRaw progress_callback-compatible function (libraw_types.h's

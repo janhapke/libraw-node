@@ -2,6 +2,7 @@
 
 #include "cancel.h"
 #include "errors.h"
+#include "events.h"
 #include "image_format.h"
 
 #include <libraw/libraw.h>
@@ -92,6 +93,21 @@ void ValidateKeys(Napi::Env env, Napi::Object obj, const std::vector<std::string
 
 // T09: RejectIfAborted (the pre-abort fast path) moved to src/errors.h/.cc
 // so src/processor.cc can share it verbatim.
+
+// T10: attaches this job's buffered progress/dataError events (src/events.h)
+// to `value` (the resolved result object, or a rejected error's own
+// `.Value()`) as an `events` array property. lib/fused.cjs reads it,
+// invokes onProgress()/onDataError() from it, then deletes the property so
+// it never becomes part of the package's public result/error shape (see
+// src/fused.h's documented Promise<{...}> result types -- none of them
+// mention `events`). Fused helpers never register the exif-tag callback
+// (docs/plan/tasks.md's T10 "Do" list only asks fused helpers for
+// onProgress/onDataError, not exifTag), so a kExifTag event never appears
+// here in practice -- EventsToArray handles it anyway, for uniformity with
+// Processor's `_drainEvents()`.
+void AttachEvents(Napi::Env env, Napi::Object value, const std::shared_ptr<JobCancelState>& cancelState) {
+  value.Set("events", EventsToArray(env, cancelState->events->Drain()));
+}
 
 Napi::Object OptionsObjectOrEmpty(Napi::Env env, const Napi::CallbackInfo& info, const char* stage) {
   if (info.Length() > 1 && !info[1].IsUndefined()) {
@@ -235,6 +251,7 @@ class DecodeWorker : public Napi::AsyncWorker {
       return;
     }
     raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
+    raw_->set_dataerror_handler(&RecordDataErrorEvent, cancelState_.get());
     if (opts_.has_shot_select) {
       raw_->imgdata.rawparams.shot_select = opts_.shot_select;
     }
@@ -268,7 +285,9 @@ class DecodeWorker : public Napi::AsyncWorker {
     cancelState_->active->store(false);
     if (rc_ != LIBRAW_SUCCESS) {
       if (raw_) raw_->recycle();
-      deferred_.Reject(MakeStageError(env, rc_, "decode").Value());
+      Napi::Object err = MakeStageError(env, rc_, "decode").Value();
+      AttachEvents(env, err, cancelState_);
+      deferred_.Reject(err);
       return;
     }
     try {
@@ -309,6 +328,7 @@ class DecodeWorker : public Napi::AsyncWorker {
       result.Set("data", out);
       result.Set("flip", flip_);
       result.Set("warnings", WarningsToArray(env, warnings_));
+      AttachEvents(env, result, cancelState_);
 
       raw_->recycle();
       deferred_.Resolve(result);
@@ -321,7 +341,9 @@ class DecodeWorker : public Napi::AsyncWorker {
   void OnError(const Napi::Error&) override {
     cancelState_->active->store(false);
     if (raw_) raw_->recycle();
-    deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "decode").Value());
+    Napi::Object err = MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "decode").Value();
+    AttachEvents(Env(), err, cancelState_);
+    deferred_.Reject(err);
   }
 
  private:
@@ -398,6 +420,7 @@ class IdentifyWorker : public Napi::AsyncWorker {
       return;
     }
     raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
+    raw_->set_dataerror_handler(&RecordDataErrorEvent, cancelState_.get());
     // "OR it into the existing default" (docs/plan/tasks.md T08): the
     // caller's own rawparams.options (0 if not given) plus
     // CHECK_THUMBNAILS_KNOWN_VENDORS, which fixes 0-sized/unknown thumbs_list
@@ -417,7 +440,9 @@ class IdentifyWorker : public Napi::AsyncWorker {
     cancelState_->active->store(false);
     if (rc_ != LIBRAW_SUCCESS) {
       if (raw_) raw_->recycle();
-      deferred_.Reject(MakeStageError(env, rc_, "identify").Value());
+      Napi::Object err = MakeStageError(env, rc_, "identify").Value();
+      AttachEvents(env, err, cancelState_);
+      deferred_.Reject(err);
       return;
     }
 
@@ -475,6 +500,7 @@ class IdentifyWorker : public Napi::AsyncWorker {
     result.Set("decoder", decoder);
     result.Set("warnings", WarningsToArray(env, d.process_warnings));
     result.Set("metadata", Napi::Object::New(env));  // T14 fills this in fully
+    AttachEvents(env, result, cancelState_);
 
     raw_->recycle();
     deferred_.Resolve(result);
@@ -483,7 +509,9 @@ class IdentifyWorker : public Napi::AsyncWorker {
   void OnError(const Napi::Error&) override {
     cancelState_->active->store(false);
     if (raw_) raw_->recycle();
-    deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "identify").Value());
+    Napi::Object err = MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "identify").Value();
+    AttachEvents(Env(), err, cancelState_);
+    deferred_.Reject(err);
   }
 
  private:
@@ -535,6 +563,7 @@ class ThumbnailWorker : public Napi::AsyncWorker {
       return;
     }
     raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
+    raw_->set_dataerror_handler(&RecordDataErrorEvent, cancelState_.get());
     // Same "fix 0-sized/unknown entries" rationale as identify() (see
     // IdentifyWorker::Execute) -- must be set before open_buffer.
     raw_->imgdata.rawparams.options |= LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_KNOWN_VENDORS;
@@ -575,7 +604,9 @@ class ThumbnailWorker : public Napi::AsyncWorker {
     cancelState_->active->store(false);
     if (rc_ != LIBRAW_SUCCESS) {
       if (raw_) raw_->recycle();
-      deferred_.Reject(MakeStageError(env, rc_, "thumbnail").Value());
+      Napi::Object err = MakeStageError(env, rc_, "thumbnail").Value();
+      AttachEvents(env, err, cancelState_);
+      deferred_.Reject(err);
       return;
     }
 
@@ -590,6 +621,7 @@ class ThumbnailWorker : public Napi::AsyncWorker {
     result.Set("colors", img_->colors);
     result.Set("bits", img_->bits);
     result.Set("data", out);
+    AttachEvents(env, result, cancelState_);
 
     LibRaw::dcraw_clear_mem(img_);
     img_ = nullptr;
@@ -604,7 +636,9 @@ class ThumbnailWorker : public Napi::AsyncWorker {
       img_ = nullptr;
     }
     if (raw_) raw_->recycle();
-    deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "thumbnail").Value());
+    Napi::Object err = MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, "thumbnail").Value();
+    AttachEvents(Env(), err, cancelState_);
+    deferred_.Reject(err);
   }
 
  private:

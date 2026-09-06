@@ -41,6 +41,7 @@
 
 #include "cancel.h"
 #include "errors.h"
+#include "events.h"
 #include "image_format.h"
 #include "processor.h"
 
@@ -137,6 +138,17 @@ class ProcessorAsyncWorker : public Napi::AsyncWorker {
   // needed here for that path.
   void Execute() override {
     processor_->raw_->set_progress_handler(&CancelAwareProgressCallback, cancelState_.get());
+    // T10: dataError events on every job; exifTag events only when this
+    // Processor was constructed with `{ exifTags: true }` (processor.h's
+    // exifTags_ comment) -- "the exif callback is registered only then" per
+    // docs/plan/tasks.md's T10 section. Both callbacks only ever push plain
+    // data into cancelState_->events (src/events.cc) -- never touch Napi::*
+    // -- so installing them unconditionally here (data error) or
+    // conditionally (exif) is as safe as the progress handler above.
+    processor_->raw_->set_dataerror_handler(&RecordDataErrorEvent, cancelState_.get());
+    if (processor_->exifTags_) {
+      processor_->raw_->set_exifparser_handler(&RecordExifTagEvent, cancelState_.get());
+    }
     if (cancelState_->flag->load()) {
       rc_ = LIBRAW_CANCELLED_BY_CALLBACK;
       return;
@@ -161,7 +173,15 @@ class ProcessorAsyncWorker : public Napi::AsyncWorker {
   void SettleCancelState() {
     cancelState_->active->store(false);
     processor_->raw_->set_progress_handler(nullptr, nullptr);
+    processor_->raw_->set_dataerror_handler(nullptr, nullptr);
+    processor_->raw_->set_exifparser_handler(nullptr, nullptr);
     processor_->raw_->clearCancelFlag();
+    // T10: hand this job's buffered events off to the Processor
+    // (processor.h's pendingEvents_) for lib/processor.cjs to pull via
+    // `_drainEvents()` right after the promise this worker settles --
+    // called from both OnOK() and OnError() below, so every job's events
+    // (successful, rejected, or cancelled) are delivered exactly once.
+    processor_->pendingEvents_ = cancelState_->events->Drain();
   }
 
   void OnOK() override {

@@ -233,9 +233,11 @@ add_library(addon SHARED
   src/addon.cc
   src/cancel.cc
   src/errors.cc
+  src/events.cc
   src/fused.cc
   src/image_format.cc
-  src/processor.cc)
+  src/processor.cc
+  src/progress_stage.cc)
 set_target_properties(addon PROPERTIES
   PREFIX ""
   SUFFIX ".node"

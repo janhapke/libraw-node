@@ -19,6 +19,7 @@
   "scripts": {
     "build:linux": "scripts/build-linux.sh x64",
     "gen:errors": "node scripts/gen-errors.js",
+    "gen:progress": "node scripts/gen-progress.js",
     "test": "vitest run --reporter=verbose"
   },
   "dependencies": {

@@ -1,10 +1,17 @@
 #include "cancel.h"
 
+#include "progress_stage.h"
+
 namespace libraw_node {
 
-int CancelAwareProgressCallback(void* data, enum LibRaw_progress /*stage*/, int /*iteration*/,
-                                 int /*expected*/) {
+int CancelAwareProgressCallback(void* data, enum LibRaw_progress stage, int iteration, int expected) {
   auto* state = static_cast<JobCancelState*>(data);
+  // T10: record a progress event before checking cancellation -- a stage
+  // that arrives on the same call that ends up cancelling the job (the
+  // callback itself decides cancellation by its return value, so the stage
+  // that triggers it has, by definition, already started) is still a real
+  // stage transition worth reporting.
+  state->events->PushProgress(ProgressStageName(static_cast<int>(stage)), iteration, expected);
   // Relaxed: this only needs to observe a `true` written by cancel() (JS
   // thread) at some point after it happened, not any particular ordering
   // with other memory -- the actual interruption still routes through
