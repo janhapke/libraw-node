@@ -28,7 +28,7 @@ libraw-node/
 
 ```dockerfile
 FROM rockylinux/rockylinux:8-ubi-init
-RUN dnf install -y epel-release && \
+RUN dnf install -y epel-release dnf-plugins-core && dnf config-manager --set-enabled powertools && \
     dnf install -y gcc-toolset-14-gcc-c++ make cmake git python3.12 tar xz nasm && \
     dnf install -y gcc-toolset-14-gcc-c++-aarch64-linux-gnu || true   # arm64 cross, if available
 ENV PATH="/opt/rh/gcc-toolset-14/root/usr/bin:$PATH"
@@ -38,7 +38,7 @@ RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-l
 WORKDIR /work
 ```
 
-Rocky 8 gives glibc 2.28, the same floor `sharp` and `@janhapke/sharp-electron` ship with. `nasm` is for
+Rocky 8 gives glibc 2.28, the same floor `sharp` and `@janhapke/sharp-electron` ship with. `nasm` lives in the `powertools` (CRB) repo, which must be enabled first (verified in T00). `nasm` is for
 libjpeg-turbo's SIMD.
 
 ## 3. CMakeLists.txt sketch
