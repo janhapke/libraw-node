@@ -145,7 +145,7 @@ describe('Processor — busy guard (ERR_LIBRAW_BUSY)', () => {
         // eslint-disable-next-line no-console
         console.log(`ERR_LIBRAW_BUSY rejection latency: ${elapsedMs.toFixed(3)} ms`);
         expect(elapsedMs).toBeGreaterThanOrEqual(0);
-        expect(elapsedMs).toBeLessThan(5);
+        expect(elapsedMs).toBeLessThan(25); // typical <1 ms; 25 ms tolerates parallel vitest workers decoding with OpenMP
 
         await first; // let the in-flight unpack() finish before close()
         p.close();

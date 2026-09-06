@@ -129,6 +129,27 @@ describe.skipIf(!realTestImagesDir)('metadata — real camera files (LIBRAW_TEST
         expect(nikonDefinedCount).toBeGreaterThan(0);
     });
 
+    // 64-bit unsigned fields (libraw_makernotes_lens_t.LensID and friends):
+    // omitted entirely at LibRaw's UINT64_MAX unset sentinel, otherwise a
+    // Number (if it fits Number.MAX_SAFE_INTEGER) or a BigInt (if not) --
+    // never a Number with silently lost precision. See the `uint64` type in
+    // api/metadata.annotations.json and scripts/gen-metadata-cc.js.
+    it('lens.makernotes.LensID: P3210620.ORF has no LensID key (UINT64_MAX / unset)', async () => {
+        const buf = readFileSync(realImagePath('P3210620.ORF'));
+        const info = await libraw.identify(buf);
+        const mn = info.metadata.lens.makernotes;
+        expect('LensID' in mn).toBe(false);
+        expect(mn.LensID).toBeUndefined();
+    });
+
+    it('lens.makernotes.LensID: DSC_4985.NEF has the exact 64-bit value as a BigInt (no precision loss)', async () => {
+        const buf = readFileSync(realImagePath('DSC_4985.NEF'));
+        const info = await libraw.identify(buf);
+        const mn = info.metadata.lens.makernotes;
+        expect(typeof mn.LensID).toBe('bigint');
+        expect(mn.LensID).toBe(11114933715598089230n);
+    });
+
     it('color.profile is either undefined or a Buffer, for every real file (reported)', async () => {
         for (const name of ['IMGP5127.DNG', 'DSC_4985.NEF', 'P3210619.ORF', 'P3210620.ORF']) {
             const buf = readFileSync(realImagePath(name));

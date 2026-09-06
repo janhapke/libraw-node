@@ -8,7 +8,9 @@
 // (color.profile, color.WB_Coeffs/WBCT_Coeffs, makernotes.common.afdata).
 #include "../metadata.h"
 
+#include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace libraw_node {
@@ -293,7 +295,16 @@ Napi::Object ToObject_libraw_dnglens_t(Napi::Env env, const libraw_dnglens_t& s)
 
 Napi::Object ToObject_libraw_makernotes_lens_t(Napi::Env env, const libraw_makernotes_lens_t& s) {
   Napi::Object obj = Napi::Object::New(env);
-  obj.Set("LensID", Napi::Number::New(env, static_cast<double>(s.LensID)));
+  {
+    uint64_t raw64 = static_cast<uint64_t>(s.LensID);
+    if (raw64 != std::numeric_limits<uint64_t>::max()) {
+      if (raw64 <= 9007199254740991ULL) {  // Number.MAX_SAFE_INTEGER (2^53 - 1)
+        obj.Set("LensID", Napi::Number::New(env, static_cast<double>(raw64)));
+      } else {
+        obj.Set("LensID", Napi::BigInt::New(env, raw64));
+      }
+    }
+  }
   {
     std::string str(s.Lens, strnlen(s.Lens, 128));
     if (!str.empty()) obj.Set("Lens", str);
@@ -304,7 +315,16 @@ Napi::Object ToObject_libraw_makernotes_lens_t(Napi::Env env, const libraw_maker
   if (s.LensMount != 0) {
     obj.Set("LensMount", Napi::Number::New(env, static_cast<double>(s.LensMount)));
   }
-  obj.Set("CamID", Napi::Number::New(env, static_cast<double>(s.CamID)));
+  {
+    uint64_t raw64 = static_cast<uint64_t>(s.CamID);
+    if (raw64 != std::numeric_limits<uint64_t>::max()) {
+      if (raw64 <= 9007199254740991ULL) {  // Number.MAX_SAFE_INTEGER (2^53 - 1)
+        obj.Set("CamID", Napi::Number::New(env, static_cast<double>(raw64)));
+      } else {
+        obj.Set("CamID", Napi::BigInt::New(env, raw64));
+      }
+    }
+  }
   if (s.CameraFormat != 0) {
     obj.Set("CameraFormat", Napi::Number::New(env, static_cast<double>(s.CameraFormat)));
   }
@@ -369,17 +389,44 @@ Napi::Object ToObject_libraw_makernotes_lens_t(Napi::Env env, const libraw_maker
   if (s.LensFStops != 0) {
     obj.Set("LensFStops", Napi::Number::New(env, static_cast<double>(s.LensFStops)));
   }
-  obj.Set("TeleconverterID", Napi::Number::New(env, static_cast<double>(s.TeleconverterID)));
+  {
+    uint64_t raw64 = static_cast<uint64_t>(s.TeleconverterID);
+    if (raw64 != std::numeric_limits<uint64_t>::max()) {
+      if (raw64 <= 9007199254740991ULL) {  // Number.MAX_SAFE_INTEGER (2^53 - 1)
+        obj.Set("TeleconverterID", Napi::Number::New(env, static_cast<double>(raw64)));
+      } else {
+        obj.Set("TeleconverterID", Napi::BigInt::New(env, raw64));
+      }
+    }
+  }
   {
     std::string str(s.Teleconverter, strnlen(s.Teleconverter, 128));
     if (!str.empty()) obj.Set("Teleconverter", str);
   }
-  obj.Set("AdapterID", Napi::Number::New(env, static_cast<double>(s.AdapterID)));
+  {
+    uint64_t raw64 = static_cast<uint64_t>(s.AdapterID);
+    if (raw64 != std::numeric_limits<uint64_t>::max()) {
+      if (raw64 <= 9007199254740991ULL) {  // Number.MAX_SAFE_INTEGER (2^53 - 1)
+        obj.Set("AdapterID", Napi::Number::New(env, static_cast<double>(raw64)));
+      } else {
+        obj.Set("AdapterID", Napi::BigInt::New(env, raw64));
+      }
+    }
+  }
   {
     std::string str(s.Adapter, strnlen(s.Adapter, 128));
     if (!str.empty()) obj.Set("Adapter", str);
   }
-  obj.Set("AttachmentID", Napi::Number::New(env, static_cast<double>(s.AttachmentID)));
+  {
+    uint64_t raw64 = static_cast<uint64_t>(s.AttachmentID);
+    if (raw64 != std::numeric_limits<uint64_t>::max()) {
+      if (raw64 <= 9007199254740991ULL) {  // Number.MAX_SAFE_INTEGER (2^53 - 1)
+        obj.Set("AttachmentID", Napi::Number::New(env, static_cast<double>(raw64)));
+      } else {
+        obj.Set("AttachmentID", Napi::BigInt::New(env, raw64));
+      }
+    }
+  }
   {
     std::string str(s.Attachment, strnlen(s.Attachment, 128));
     if (!str.empty()) obj.Set("Attachment", str);

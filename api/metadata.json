@@ -690,9 +690,9 @@
       ],
       "fields": {
         "LensID": {
-          "doc": "64-bit lens ID as decoded from maker notes (indexes LibRaw's lens database).",
-          "type": "uint",
-          "notes": "Read as a JS number (static_cast<double>); values above 2^53 would lose precision, though no lens ID LibRaw currently assigns is that large. LibRaw's own unset value for this field is UINT64_MAX (all bits set, verified empirically on the synthetic DNG), not 0 -- not usable as this generator's `unset` sentinel (it cannot round-trip through a JS Number/JSON literal and back into an exact 64-bit C++ comparison), so no `unset` is declared here; callers should treat an implausibly large LensID as \"no lens data\".",
+          "doc": "64-bit lens ID as decoded from maker notes (indexes LibRaw's lens database). Number when it fits Number.MAX_SAFE_INTEGER, otherwise a BigInt; the key is absent (not any sentinel value) when LibRaw has not filled it in.",
+          "type": "uint64",
+          "notes": "LibRaw's own unset value for this field is UINT64_MAX (all bits set, verified empirically on the synthetic DNG), not 0 -- handled specially by scripts/gen-metadata-cc.js's `uint64` case rather than this file's generic `unset` mechanism; see the top-level $comment.",
           "cType": "UINT64"
         },
         "Lens": {
@@ -716,9 +716,9 @@
           "cType": "ushort"
         },
         "CamID": {
-          "doc": "64-bit camera-body ID as decoded from maker notes (indexes LibRaw's camera database).",
-          "type": "uint",
-          "notes": "Same precision/unset note as LensID.",
+          "doc": "64-bit camera-body ID as decoded from maker notes (indexes LibRaw's camera database). Number when it fits Number.MAX_SAFE_INTEGER, otherwise a BigInt; the key is absent when LibRaw has not filled it in.",
+          "type": "uint64",
+          "notes": "Same unset note as LensID.",
           "cType": "UINT64"
         },
         "CameraFormat": {
@@ -853,9 +853,9 @@
           "cType": "float"
         },
         "TeleconverterID": {
-          "doc": "64-bit teleconverter ID, if a teleconverter was attached and recognized.",
-          "type": "uint",
-          "notes": "Same precision/unset note as LensID.",
+          "doc": "64-bit teleconverter ID, if a teleconverter was attached and recognized. Number when it fits Number.MAX_SAFE_INTEGER, otherwise a BigInt; the key is absent when unset.",
+          "type": "uint64",
+          "notes": "Same unset note as LensID.",
           "cType": "UINT64"
         },
         "Teleconverter": {
@@ -867,9 +867,9 @@
           ]
         },
         "AdapterID": {
-          "doc": "64-bit lens-mount adapter ID, if an adapter was recognized.",
-          "type": "uint",
-          "notes": "Same precision/unset note as LensID.",
+          "doc": "64-bit lens-mount adapter ID, if an adapter was recognized. Number when it fits Number.MAX_SAFE_INTEGER, otherwise a BigInt; the key is absent when unset.",
+          "type": "uint64",
+          "notes": "Same unset note as LensID.",
           "cType": "UINT64"
         },
         "Adapter": {
@@ -881,9 +881,9 @@
           ]
         },
         "AttachmentID": {
-          "doc": "64-bit attachment (e.g. close-up filter) ID, if recognized.",
-          "type": "uint",
-          "notes": "Same precision/unset note as LensID.",
+          "doc": "64-bit attachment (e.g. close-up filter) ID, if recognized. Number when it fits Number.MAX_SAFE_INTEGER, otherwise a BigInt; the key is absent when unset.",
+          "type": "uint64",
+          "notes": "Same unset note as LensID.",
           "cType": "UINT64"
         },
         "Attachment": {

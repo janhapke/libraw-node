@@ -114,7 +114,8 @@ the manifest; CI fails on new or removed fields until the manifest is updated. T
 > `api/metadata.annotations.json` is keyed by exact C struct-type reference string (e.g.
 > `"libraw_gps_info_t"`, `"struct ph1_t"` for the one struct LibRaw declares without a typedef), not by
 > imgdata path, so a struct type reached from more than one field is annotated once. The per-field `type`
-> values actually used are `int|uint|float|double|string|bytes|int[]|float[]|matrix|struct|time|unsupported`
+> values actually used are
+> `int|uint|uint64|float|double|string|bytes|int[]|float[]|matrix|struct|time|unsupported`
 > (`matrix` covers both numeric 2-D arrays like `cmatrix`/`rgb_cam` and the CFA pattern arrays `xtrans`/
 > `xtrans_abs`, which are `char[6][6]` but numeric-valued, not text). "Char arrays as trimmed strings" holds
 > for `char[N]` fields annotated `string` (NUL-trimmed via `strnlen`, and omitted entirely -- not an empty
@@ -122,11 +123,21 @@ the manifest; CI fails on new or removed fields until the manifest is updated. T
 > (`altref`/`latref`/`longref`/`gpsstatus`) are also `string`-typed but become a 1-character string, guarded
 > by the same `unset` mechanism as numeric fields. "Omit fields at their unset sentinel" is implemented as a
 > per-field `unset` value in the annotation (not a fixed set of `{0, -1, 0xffff}` tried automatically) --
-> T14a discovered empirically that `libraw_raw_inset_crop_t`'s `cleft`/`ctop` use `0xffff` (65535) but that
-> the UINT64 lens/camera/teleconverter/adapter/attachment ID fields in `libraw_makernotes_lens_t` do *not*
-> use `0` (their real unset value is `UINT64_MAX`, confirmed against the synthetic fixture), so those five
-> fields carry no `unset` annotation at all rather than a wrong one -- a value that large cannot round-trip
-> exactly through a JS Number/JSON literal and back into an exact 64-bit C++ comparison anyway.
+> T14a discovered empirically that `libraw_raw_inset_crop_t`'s `cleft`/`ctop` use `0xffff` (65535).
+>
+> The five UINT64 lens/camera/teleconverter/adapter/attachment ID fields in `libraw_makernotes_lens_t`
+> needed a dedicated `type: "uint64"` instead: their real unset value is `UINT64_MAX` (confirmed against the
+> synthetic fixture and both real ORF/NEF files below), not `0`, and `UINT64_MAX` cannot round-trip exactly
+> through a JS Number/JSON literal and back into an exact 64-bit C++ comparison the way every other `unset`
+> value here does -- so a first pass left these five fields with no `unset` annotation at all (always
+> present, silently losing precision above 2^53 when rendered as a plain `Napi::Number`: `P3210620.ORF`'s
+> `LensID`, actually `UINT64_MAX`, printed as the JS Number `18446744073709552000`, and `DSC_4985.NEF`'s real
+> `LensID` `11114933715598089230` printed as `11114933715598090000`). `type: "uint64"` fixes both problems at
+> once: `scripts/gen-metadata-cc.js` compares the raw value against `std::numeric_limits<uint64_t>::max()`
+> in C++ (never through this JSON file) and omits the key when equal; otherwise it emits a `Napi::Number`
+> when the value is `<= Number.MAX_SAFE_INTEGER` (2^53 - 1) or a `Napi::BigInt` (`Napi::BigInt::New`) when
+> it is larger, so no value is ever silently rounded. `P3210620.ORF` (whose `LensID` is `UINT64_MAX`) now has
+> no `lens.makernotes.LensID` key at all; `DSC_4985.NEF`'s is a JS BigInt, exactly `11114933715598089230n`.
 >
 > Pointer fields are `unsupported` except `color.profile` (paired with `color.profile_length`, becomes a
 > `Buffer` when non-null) -- exactly the one documented exception in `docs/plan/tasks.md`'s T14a Do list.

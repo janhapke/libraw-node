@@ -12,6 +12,23 @@
 // building a read-only Napi::Object field by field from api/metadata.json's
 // per-field `type`:
 //   int/uint/float/double  -> Napi::Number.
+//   uint64                  -> a 64-bit unsigned field (LibRaw's UINT64,
+//                              currently libraw_makernotes_lens_t's
+//                              LensID/CamID/TeleconverterID/AdapterID/
+//                              AttachmentID): the key is omitted when the
+//                              raw value equals UINT64_MAX (LibRaw's own
+//                              unset sentinel for these -- compared in C++
+//                              against std::numeric_limits<uint64_t>::max(),
+//                              never round-tripped through a JS Number/JSON
+//                              literal), otherwise emitted as a Napi::Number
+//                              when it fits in Number.MAX_SAFE_INTEGER
+//                              (2^53-1) or a Napi::BigInt when it does not
+//                              -- unlike every other numeric `type` here,
+//                              this one does NOT use the generic `unset`
+//                              annotation mechanism (see withUnsetGuard):
+//                              the sentinel comparison is baked into this
+//                              case instead, since UINT64_MAX cannot survive
+//                              a JSON round-trip as an exact integer.
 //   time                   -> Napi::Number (raw seconds, LibRaw's time_t
 //                              value -- documented on other.timestamp in
 //                              api/metadata.annotations.json, not converted
@@ -188,6 +205,22 @@ function genField(structKey, structVar, name, field) {
       return withUnsetGuard(field, access, setStatement);
     }
 
+    case 'uint64': {
+      // See this generator's own header comment ("uint64") for why the
+      // UINT64_MAX unset check is baked in here rather than going through
+      // withUnsetGuard/the manifest's `unset` field.
+      return `  {
+    uint64_t raw64 = static_cast<uint64_t>(${access});
+    if (raw64 != std::numeric_limits<uint64_t>::max()) {
+      if (raw64 <= 9007199254740991ULL) {  // Number.MAX_SAFE_INTEGER (2^53 - 1)
+        obj.Set(${key}, Napi::Number::New(env, static_cast<double>(raw64)));
+      } else {
+        obj.Set(${key}, Napi::BigInt::New(env, raw64));
+      }
+    }
+  }`;
+    }
+
     case 'string': {
       if (arrayDims.length === 1) {
         const len = arrayDims[0];
@@ -291,7 +324,9 @@ function renderCc(manifest) {
     '// (color.profile, color.WB_Coeffs/WBCT_Coeffs, makernotes.common.afdata).',
     '#include "../metadata.h"',
     '',
+    '#include <cstdint>',
     '#include <cstring>',
+    '#include <limits>',
     '#include <string>',
     '',
     'namespace libraw_node {',
