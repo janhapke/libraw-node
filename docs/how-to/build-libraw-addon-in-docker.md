@@ -89,7 +89,8 @@ target_link_libraries(raw_r PUBLIC zlibstatic jpeg-static)
 option(LIBRAW_NODE_OPENMP "Enable OpenMP demosaic" OFF)
 if(LIBRAW_NODE_OPENMP)
   find_package(OpenMP REQUIRED)
-  target_link_libraries(raw_r PUBLIC OpenMP::OpenMP_CXX)   # static libgomp: see how-to/set-up-prebuilds-and-ci.md
+  target_link_libraries(raw_r PUBLIC OpenMP::OpenMP_CXX)   # compile-time only (-fopenmp); the addon links
+    # libgomp dynamically, not statically -- see how-to/set-up-prebuilds-and-ci.md §4 (T04 finding)
 endif()
 
 # addon

@@ -135,6 +135,17 @@ Acceptance:
   jpeg or z.
 - `node -p "require('./lib/index.cjs').cameraCount()"` ≥ 1200.
 
+> **Correction (found in T04):** the "no gomp in NEEDED" bullet above passed under T03 only because no T03
+> export actually exercises LibRaw's OpenMP-compiled demosaic code paths (`version`/`capabilities`/
+> `cameraList`/`cameraCount` are all static, non-decoding calls). Once T04's `decodeSync` called
+> `dcraw_process`, linking turned out to be impossible as specified: gcc-toolset-14's static `libgomp.a` is
+> not built with `-fPIC`, so statically linking it into a shared object (any shared object, not specific to
+> this addon) fails at link time with a TLS-relocation error binutils refuses to allow. T04 changed the
+> addon to link `libgomp.so.1` dynamically instead (see the comment in `CMakeLists.txt` above
+> `target_link_libraries(addon PRIVATE gomp)`) and updated `scripts/check-binary.sh`'s NEEDED allowlist to
+> permit it explicitly, while still forbidding libjpeg/libz. `check-binary.sh` from T03 as originally
+> written no longer exits 0 on the current binary; the updated script does.
+
 ### T04 — Test fixtures and a synchronous first decode
 
 Read: `docs/tutorials/01-first-decode.md`, `/home/jan/dev/photoview/tests/fixtures/README.md` and

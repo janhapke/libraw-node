@@ -266,19 +266,52 @@ if(LINUX)
     "-Wl,--version-script=${CMAKE_SOURCE_DIR}/cmake/napi.map"
     -static-libstdc++
     -static-libgcc)
-  if(LIBRAW_NODE_OPENMP)
-    # Static libgomp gotcha (T00 spike): passing -fopenmp on the *link* line
-    # makes the gcc driver append a *dynamic* -lgomp itself, which silently
-    # wins over an earlier explicit static path (ldd would still show
-    # libgomp.so.1). -fopenmp is deliberately absent from this link line;
-    # only the compile step above needs it. Force static resolution instead:
-    target_link_options(addon PRIVATE -Wl,-Bstatic -lgomp -Wl,-Bdynamic)
-  endif()
   # LibRaw's reentrant build uses pthread mutexes regardless of OpenMP
   # (docs/explanation/what-is-libraw.md, threading model); on Rocky 8's glibc
   # 2.28, pthread is still a separate shared object (merged into libc only in
   # glibc 2.34), so link it explicitly. libpthread.so/libm.so/libdl.so are all
   # in scripts/check-binary.sh's NEEDED allowlist.
+  #
+  # T04 found two problems with the static-libgomp plan recorded by T00/T03
+  # (docs/how-to/build-libraw-addon-in-docker.md, docs/how-to/set-up-prebuilds-and-ci.md):
+  #
+  # 1. Ordering: target_link_options()'s LINK_OPTIONS property is placed on
+  #    the link line ahead of LINK_LIBRARIES regardless of call order, so the
+  #    original target_link_options(addon PRIVATE -Wl,-Bstatic -lgomp
+  #    -Wl,-Bdynamic) put "-lgomp" *before* raw_r.a on the command line -- ld
+  #    only pulls archive members to satisfy symbols already undefined at the
+  #    point the archive is scanned, so an archive appearing before its only
+  #    referrer contributes nothing (version()/capabilities()/cameraList()
+  #    never touch OpenMP code paths, so T03's link never surfaced this --
+  #    decodeSync, added in T04, is the first call into the OpenMP-compiled
+  #    demosaic code). Fixed by moving to target_link_libraries(), which
+  #    appends to one ordered list in call order; calling it after the
+  #    addon->raw_r link (near the top of this file) places it correctly.
+  # 2. Once correctly ordered, the *static* link (-Wl,-Bstatic -lgomp
+  #    -Wl,-Bdynamic) fails outright: gcc-toolset-14's libgomp.a was built
+  #    without -fPIC, so its object files use the local-exec TLS model for
+  #    libgomp's internal `gomp_tls_data` (visible as an
+  #    "R_X86_64_TPOFF32 ... can not be used when making a shared object"
+  #    linker error from barrier.o, pulled in by any #pragma omp parallel
+  #    region's implicit barrier). Local-exec TLS relocations assume the
+  #    referencing module owns the process's static TLS block, which is only
+  #    true for the main executable -- never true for a dlopen'd Node addon
+  #    .node file. This is a known GCC/binutils limitation (this exact
+  #    archive cannot be statically linked into *any* shared object, not
+  #    specific to this project), confirmed by testing that neither
+  #    reordering alone nor `-Wl,-z,notext` (which does not relax this
+  #    particular TLS-relocation check) works around it. Only rebuilding
+  #    libgomp from source with a PIC-safe TLS model would allow static
+  #    linking; that is a follow-up (see docs/how-to/build-libraw-addon-in-docker.md),
+  #    not part of T04. For now OpenMP is linked dynamically, like
+  #    pthread/m/dl below: libgomp.so.1 ships with every GCC/glibc Linux
+  #    install (same ubiquity argument as those three), so
+  #    scripts/check-binary.sh's NEEDED allowlist now permits it explicitly
+  #    while still forbidding libjpeg/libz (which remain fully static, no
+  #    such constraint applies to them).
+  if(LIBRAW_NODE_OPENMP)
+    target_link_libraries(addon PRIVATE gomp)
+  endif()
   target_link_libraries(addon PRIVATE pthread m dl)
 elseif(APPLE)
   # T20 adds the macOS-specific link arm (-undefined dynamic_lookup, an

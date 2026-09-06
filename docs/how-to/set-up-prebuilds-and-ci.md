@@ -109,8 +109,18 @@ Runner names follow what `sharp` and lightdrift use in 2026 (`macos-15-intel`, `
 
 ## 4. Static OpenMP (Phase 6)
 
-- Linux (gcc-toolset-14): link `-fopenmp` with `-Wl,-Bstatic -lgomp -Wl,-Bdynamic`; verify no `libgomp.so`
-  in NEEDED. libgomp's static archive ships with the toolset.
+- Linux (gcc-toolset-14): **not achievable as originally planned.** T04 found that linking `-fopenmp` with
+  `-Wl,-Bstatic -lgomp -Wl,-Bdynamic` fails at link time (`relocation R_X86_64_TPOFF32 against hidden symbol
+  'gomp_tls_data' can not be used when making a shared object`) once any code path that actually uses
+  `#pragma omp parallel` (e.g. `dcraw_process`'s demosaic) is linked in: gcc-toolset-14's `libgomp.a` was
+  built without `-fPIC`, so its internal thread-local state uses the local-exec TLS model, which only works
+  when linked into the main executable, never into a `dlopen`'d shared object like a Node addon `.node`
+  file — confirmed this is a hard binutils restriction (reordering the link line and `-Wl,-z,notext` both
+  fail to work around it), not something fixable from this repo's build flags alone. The addon links
+  `libgomp.so.1` dynamically instead (see the long comment above
+  `target_link_libraries(addon PRIVATE gomp)` in `CMakeLists.txt`); `scripts/check-binary.sh`'s NEEDED
+  allowlist permits it. A real static-PIC libgomp would require rebuilding libgomp from GCC source with an
+  appropriate TLS model — out of scope unless revisited.
 - macOS: `brew install libomp`; link `libomp.a` (Homebrew builds it), `-Xpreprocessor -fopenmp`.
 - Windows: MSVC `/openmp` links `vcomp140.dll` dynamically (present with the VC++ redistributable that
   Electron itself needs, but avoid the dependency): prefer clang-cl with `libomp` static, or skip OpenMP on
