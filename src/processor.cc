@@ -1,6 +1,8 @@
 #include "processor.h"
 
+#include "async_workers.h"
 #include "errors.h"
+#include "image_format.h"
 
 #include <cstring>
 #include <string>
@@ -35,6 +37,14 @@ Napi::Function Processor::DefineClass(Napi::Env env) {
           InstanceMethod("adjustSizesInfoOnlySync", &Processor::AdjustSizesInfoOnlySync),
           InstanceMethod("recycle", &Processor::Recycle),
           InstanceMethod("close", &Processor::Close),
+          InstanceMethod("openBuffer", &Processor::OpenBuffer),
+          InstanceMethod("openFile", &Processor::OpenFile),
+          InstanceMethod("unpack", &Processor::Unpack),
+          InstanceMethod("unpackThumb", &Processor::UnpackThumb),
+          InstanceMethod("process", &Processor::Process),
+          InstanceMethod("image", &Processor::Image),
+          InstanceMethod("thumb", &Processor::Thumb),
+          InstanceMethod("adjustSizesInfoOnly", &Processor::AdjustSizesInfoOnly),
           InstanceMethod("errorCount", &Processor::ErrorCount),
           InstanceMethod("decoderInfo", &Processor::DecoderInfo),
           InstanceMethod("unpackFunctionName", &Processor::UnpackFunctionName),
@@ -54,7 +64,14 @@ Napi::Function Processor::DefineClass(Napi::Env env) {
 Processor::Processor(const Napi::CallbackInfo& info)
     : ObjectWrap<Processor>(info), raw_(std::make_unique<LibRaw>(ParseFlags(info))) {}
 
+void Processor::RequireNotBusy(Napi::Env env, const char* stage) {
+  if (busy_.load()) {
+    ThrowBusyError(env, stage);
+  }
+}
+
 void Processor::RequireNotClosed(Napi::Env env, const char* stage) {
+  RequireNotBusy(env, stage);
   if (closed_) {
     ThrowProcessorError(env, LIBRAW_OUT_OF_ORDER_CALL, stage);
   }
@@ -245,23 +262,6 @@ Napi::Value Processor::ImageSync(const Napi::CallbackInfo& info) {
   return result;
 }
 
-namespace {
-const char* ImageFormatName(int type) {
-  switch (type) {
-    case LIBRAW_IMAGE_JPEG:
-      return "jpeg";
-    case LIBRAW_IMAGE_BITMAP:
-      return "bitmap";
-    case LIBRAW_IMAGE_JPEGXL:
-      return "jpegxl";
-    case LIBRAW_IMAGE_H265:
-      return "h265";
-    default:
-      return "unknown";
-  }
-}
-}  // namespace
-
 // thumbSync() -> { type, width, height, colors, bits, data }
 Napi::Value Processor::ThumbSync(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -301,6 +301,7 @@ Napi::Value Processor::Recycle(const Napi::CallbackInfo& info) {
 
 Napi::Value Processor::Close(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  RequireNotBusy(env, "close");  // close() is otherwise idempotent/unguarded (see below)
   if (!closed_) {
     if (raw_) {
       raw_->recycle();
@@ -311,6 +312,195 @@ Napi::Value Processor::Close(const Napi::CallbackInfo& info) {
     closed_ = true;
   }
   return env.Undefined();
+}
+
+// --- Async (Promise-returning) stage methods (T07) --------------------------
+//
+// Common shape for all eight methods below: create the Napi::Promise::
+// Deferred first, run every synchronous validation/state check (argument
+// types, RequireOpened/RequireUnpacked/RequireProcessed/RequireThumbUnpacked
+// -- which, via RequireNotClosed, also cover RequireNotBusy) inside a
+// try/catch, and reject the *same* deferred instead of letting a Napi::Error
+// propagate as a synchronous JS exception. This is what makes the busy-guard
+// (and every other precondition failure) surface as "a rejected promise, not
+// a throw" per the task's acceptance requirement -- callers can always
+// `await processor.unpack()` / `.catch()` it, never need a try/catch around
+// the call itself. Only once every check passes does busy_ get set to true
+// and the corresponding AsyncWorker (src/async_workers.h) get queued; that
+// worker's OnOK/OnError always clears busy_ again.
+
+Napi::Value Processor::OpenBuffer(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireNotClosed(env, "openBuffer");
+    if (info.Length() < 1 || !info[0].IsBuffer()) {
+      throw Napi::TypeError::New(env, "openBuffer(buffer): buffer must be a Buffer");
+    }
+    Napi::Buffer<uint8_t> input = info[0].As<Napi::Buffer<uint8_t>>();
+    busy_ = true;
+    (new OpenBufferWorker(env, this, info.This().As<Napi::Object>(), input, deferred))->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+Napi::Value Processor::OpenFile(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireNotClosed(env, "openFile");
+    if (info.Length() < 1 || !info[0].IsString()) {
+      throw Napi::TypeError::New(env, "openFile(path): path must be a string");
+    }
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+    busy_ = true;
+    (new OpenFileWorker(env, this, info.This().As<Napi::Object>(), path, deferred))->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+Napi::Value Processor::Unpack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireOpened(env, "unpack");
+    busy_ = true;
+    auto run = [](LibRaw& raw) { return raw.unpack(); };
+    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "unpack", run,
+                            SimpleStageWorker::Mark::kUnpacked, deferred))
+        ->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+Napi::Value Processor::UnpackThumb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireOpened(env, "unpackThumb");
+    bool hasIndex = info.Length() > 0 && !info[0].IsUndefined();
+    int index = hasIndex ? info[0].As<Napi::Number>().Int32Value() : 0;
+    busy_ = true;
+    auto run = [hasIndex, index](LibRaw& raw) {
+      return hasIndex ? raw.unpack_thumb_ex(index) : raw.unpack_thumb();
+    };
+    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "unpackThumb", run,
+                            SimpleStageWorker::Mark::kThumbUnpacked, deferred))
+        ->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+Napi::Value Processor::Process(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireUnpacked(env, "process");
+    busy_ = true;
+    auto run = [](LibRaw& raw) { return raw.dcraw_process(); };
+    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "process", run,
+                            SimpleStageWorker::Mark::kProcessed, deferred))
+        ->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+Napi::Value Processor::AdjustSizesInfoOnly(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireOpened(env, "adjustSizesInfoOnly");
+    busy_ = true;
+    auto run = [](LibRaw& raw) { return raw.adjust_sizes_info_only(); };
+    (new SimpleStageWorker(env, this, info.This().As<Napi::Object>(), "adjustSizesInfoOnly", run,
+                            SimpleStageWorker::Mark::kNone, deferred))
+        ->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+// image({ into?, bgr?, stride? }) -> Promise<{ width, height, colors, bits, data }>.
+// The output Buffer is allocated (or the caller-supplied `into` validated) on
+// the JS thread here, from get_mem_image_format -- exactly like ImageSync --
+// *before* the worker is constructed; the worker itself only runs
+// copy_mem_image off-thread. See src/async_workers.h's ImageWorker comment.
+Napi::Value Processor::Image(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireProcessed(env, "image");
+
+    bool bgr = false;
+    int strideOverride = 0;
+    Napi::Value intoValue;
+
+    if (info.Length() > 0 && info[0].IsObject()) {
+      Napi::Object opts = info[0].As<Napi::Object>();
+      if (opts.Has("bgr") && !opts.Get("bgr").IsUndefined()) {
+        bgr = opts.Get("bgr").ToBoolean();
+      }
+      if (opts.Has("stride") && !opts.Get("stride").IsUndefined()) {
+        strideOverride = opts.Get("stride").ToNumber().Int32Value();
+      }
+      if (opts.Has("into") && !opts.Get("into").IsUndefined()) {
+        intoValue = opts.Get("into");
+      }
+    }
+
+    int width = 0, height = 0, colors = 0, bps = 0;
+    raw_->get_mem_image_format(&width, &height, &colors, &bps);
+    size_t defaultStride = static_cast<size_t>(width) * static_cast<size_t>(colors) * static_cast<size_t>(bps / 8);
+    size_t stride = strideOverride > 0 ? static_cast<size_t>(strideOverride) : defaultStride;
+    size_t need = stride * static_cast<size_t>(height);
+
+    Napi::Buffer<uint8_t> out;
+    if (!intoValue.IsEmpty()) {
+      if (!intoValue.IsBuffer()) {
+        throw Napi::TypeError::New(env, "image({ into }): into must be a Buffer");
+      }
+      out = intoValue.As<Napi::Buffer<uint8_t>>();
+      if (out.Length() < need) {
+        throw Napi::RangeError::New(
+            env, "image({ into }): into buffer (" + std::to_string(out.Length()) +
+                     " bytes) is smaller than the required " + std::to_string(need) + " bytes");
+      }
+    } else {
+      out = Napi::Buffer<uint8_t>::New(env, need);
+    }
+
+    busy_ = true;
+    (new ImageWorker(env, this, info.This().As<Napi::Object>(), out, static_cast<int>(stride), bgr, width, height,
+                      colors, bps, deferred))
+        ->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
+}
+
+Napi::Value Processor::Thumb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  try {
+    RequireThumbUnpacked(env, "thumb");
+    busy_ = true;
+    (new ThumbWorker(env, this, info.This().As<Napi::Object>(), deferred))->Queue();
+  } catch (const Napi::Error& e) {
+    deferred.Reject(e.Value());
+  }
+  return deferred.Promise();
 }
 
 // --- Introspection ---------------------------------------------------------

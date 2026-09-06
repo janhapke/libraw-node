@@ -46,19 +46,37 @@ void CheckLegacyLibRaw(Napi::Env env, int code, const char* stage) {
   }
 }
 
-void ThrowProcessorError(Napi::Env env, int code, const char* stage) {
+Napi::Error MakeProcessorError(Napi::Env env, int code, const char* stage) {
   std::string message = std::string(stage) + ": " + LibRaw::strerror(code);
   Napi::Error err = Napi::Error::New(env, message);
   err.Set("code", Napi::Number::New(env, code));
   err.Set("librawName", Napi::String::New(env, LibRawErrorName(code)));
   err.Set("stage", Napi::String::New(env, stage));
-  throw err;
+  return err;
+}
+
+void ThrowProcessorError(Napi::Env env, int code, const char* stage) {
+  throw MakeProcessorError(env, code, stage);
 }
 
 void CheckProcessorError(Napi::Env env, int code, const char* stage) {
   if (code != LIBRAW_SUCCESS) {
     ThrowProcessorError(env, code, stage);
   }
+}
+
+Napi::Error MakeBusyError(Napi::Env env, const char* stage) {
+  std::string message =
+      std::string(stage) + ": a LibRaw operation is already in progress on this Processor";
+  Napi::Error err = Napi::Error::New(env, message);
+  err.Set("code", Napi::Number::New(env, kErrLibRawBusyCode));
+  err.Set("librawName", Napi::String::New(env, kErrLibRawBusyName));
+  err.Set("stage", Napi::String::New(env, stage));
+  return err;
+}
+
+void ThrowBusyError(Napi::Env env, const char* stage) {
+  throw MakeBusyError(env, stage);
 }
 
 }  // namespace libraw_node

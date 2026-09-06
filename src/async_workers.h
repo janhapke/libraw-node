@@ -1,0 +1,286 @@
+// T07: Napi::AsyncWorker machinery backing Processor's Promise-returning
+// stage methods (openBuffer, openFile, unpack, unpackThumb, process, image,
+// thumb, adjustSizesInfoOnly -- see src/processor.h/.cc and
+// docs/how-to/implement-async-decode-with-cancellation.md §1, §5, §6).
+//
+// Design (one generic AsyncWorker base + one small subclass per stage kind,
+// per the task's "either is fine" guidance):
+//
+//   ProcessorAsyncWorker (this file)
+//     - Execute() [threadpool thread, no Napi::* calls allowed here] calls
+//       the subclass's Run(LibRaw&), which does the actual LibRaw call(s)
+//       and returns a LIBRAW_* return code.
+//     - OnOK()/OnError() [JS thread] reset Processor::busy_ unconditionally,
+//       then either reject with a LibRawError-shaped error built from the
+//       stored return code and stage name (src/errors.h's
+//       MakeProcessorError -- same shape ThrowProcessorError uses for the
+//       *Sync methods, so lib/errors.cjs's LibRawError.fromNative wraps
+//       either identically) or resolve with the subclass's BuildResult().
+//     - Holds a strong Napi::ObjectReference to the JS Processor object for
+//       the worker's lifetime, so the Processor (and its raw_) cannot be
+//       garbage-collected out from under a worker thread that is mid-
+//       Execute() even if the caller drops every JS reference to it.
+//
+// Every subclass here is declared `friend class ProcessorAsyncWorker;`-only
+// through inheriting *protected* Mark*() helpers defined on the base --
+// friendship in C++ is not inherited, so ProcessorAsyncWorker (declared
+// `friend` in processor.h) is the *only* class here allowed to touch
+// Processor's private raw_/inputRef_/opened_/unpacked_/processed_/
+// thumbUnpacked_ fields directly; subclasses reach them only through the
+// base class's protected helper methods.
+#pragma once
+
+#include <napi.h>
+
+#include <libraw/libraw.h>
+
+#include <cstring>
+#include <functional>
+#include <string>
+#include <utility>
+
+#include "errors.h"
+#include "image_format.h"
+#include "processor.h"
+
+namespace libraw_node {
+
+class ProcessorAsyncWorker : public Napi::AsyncWorker {
+ public:
+  ProcessorAsyncWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, std::string stage,
+                        Napi::Promise::Deferred deferred)
+      : Napi::AsyncWorker(env),
+        processor_(processor),
+        stage_(std::move(stage)),
+        deferred_(deferred),
+        selfRef_(Napi::Persistent(jsThis)) {}
+
+ protected:
+  // Runs entirely off the JS thread (the libuv threadpool). Must not touch
+  // any Napi::* type or call back into JS -- see the class comment and
+  // docs/how-to/implement-async-decode-with-cancellation.md §2's "Never
+  // touch Napi::* in Execute()". Returns a LIBRAW_* code; LIBRAW_SUCCESS
+  // means BuildResult() runs next, anything else rejects the promise.
+  virtual int Run(LibRaw& raw) = 0;
+
+  // JS thread, only called when Run() returned LIBRAW_SUCCESS. Mutates
+  // Processor's state flags (via the Mark*() helpers below) and returns the
+  // value the promise resolves with.
+  virtual Napi::Value BuildResult(Napi::Env env) = 0;
+
+  // --- helpers for subclasses (protected: Processor's fields themselves
+  // stay reachable only from this base class's own member functions, which
+  // is what the `friend class ProcessorAsyncWorker;` in processor.h grants).
+  void MarkOpened() {
+    processor_->ResetState();
+    processor_->opened_ = true;
+    processor_->inputRef_.Reset();
+  }
+  void MarkOpenedWithBuffer(Napi::Reference<Napi::Buffer<uint8_t>>&& ref) {
+    processor_->ResetState();
+    processor_->opened_ = true;
+    processor_->inputRef_ = std::move(ref);
+  }
+  void MarkUnpacked() { processor_->unpacked_ = true; }
+  void MarkThumbUnpacked() { processor_->thumbUnpacked_ = true; }
+  void MarkProcessed() { processor_->processed_ = true; }
+
+  Processor* processor_;
+
+ private:
+  void Execute() override { rc_ = Run(*processor_->raw_); }
+
+  void OnOK() override {
+    processor_->busy_.store(false);
+    if (rc_ != LIBRAW_SUCCESS) {
+      deferred_.Reject(MakeProcessorError(Env(), rc_, stage_.c_str()).Value());
+      return;
+    }
+    deferred_.Resolve(BuildResult(Env()));
+  }
+
+  // Only reached if Run() let a C++ exception escape instead of returning a
+  // non-success LIBRAW_* code (the convention every subclass below follows);
+  // defensive (e.g. std::bad_alloc from LibRaw's own allocations) rather
+  // than a path any subclass here is expected to exercise normally.
+  void OnError(const Napi::Error&) override {
+    processor_->busy_.store(false);
+    deferred_.Reject(MakeProcessorError(Env(), LIBRAW_UNSUFFICIENT_MEMORY, stage_.c_str()).Value());
+  }
+
+  int rc_ = LIBRAW_SUCCESS;
+  std::string stage_;
+  Napi::Promise::Deferred deferred_;
+  Napi::ObjectReference selfRef_;
+};
+
+// --- openBuffer ---------------------------------------------------------
+// Captures the input Buffer's pointer/length on the JS thread (constructor)
+// and pins the Buffer itself (bufRef_) for Execute()'s duration; on success,
+// hands that pin off to Processor::inputRef_ (MarkOpenedWithBuffer) so it
+// outlives this worker for as long as the open session does -- same
+// lifetime rule as OpenBufferSync (processor.h's inputRef_ comment), just
+// established from the async path instead.
+class OpenBufferWorker : public ProcessorAsyncWorker {
+ public:
+  OpenBufferWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, Napi::Buffer<uint8_t> input,
+                    Napi::Promise::Deferred deferred)
+      : ProcessorAsyncWorker(env, processor, jsThis, "openBuffer", deferred),
+        bufRef_(Napi::Persistent(input)),
+        data_(input.Data()),
+        length_(input.Length()) {}
+
+ protected:
+  int Run(LibRaw& raw) override { return raw.open_buffer(data_, length_); }
+  Napi::Value BuildResult(Napi::Env env) override {
+    MarkOpenedWithBuffer(std::move(bufRef_));
+    return env.Undefined();
+  }
+
+ private:
+  Napi::Reference<Napi::Buffer<uint8_t>> bufRef_;
+  uint8_t* data_;
+  size_t length_;
+};
+
+// --- openFile ------------------------------------------------------------
+class OpenFileWorker : public ProcessorAsyncWorker {
+ public:
+  OpenFileWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, std::string path,
+                 Napi::Promise::Deferred deferred)
+      : ProcessorAsyncWorker(env, processor, jsThis, "openFile", deferred), path_(std::move(path)) {}
+
+ protected:
+  int Run(LibRaw& raw) override { return raw.open_file(path_.c_str()); }
+  Napi::Value BuildResult(Napi::Env env) override {
+    MarkOpened();
+    return env.Undefined();
+  }
+
+ private:
+  std::string path_;
+};
+
+// --- unpack / unpackThumb / process / adjustSizesInfoOnly -----------------
+// These four stages take a single LibRaw call and, on success, set at most
+// one state flag (or none, for adjustSizesInfoOnly, matching
+// AdjustSizesInfoOnlySync) and resolve with `undefined` -- generic enough
+// for one worker parametrised by a std::function<int(LibRaw&)> plus which
+// flag (if any) to set, per the task's "or a single worker taking a
+// std::function<int(LibRaw&)>" alternative.
+class SimpleStageWorker : public ProcessorAsyncWorker {
+ public:
+  enum class Mark { kNone, kUnpacked, kThumbUnpacked, kProcessed };
+
+  SimpleStageWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, const char* stage,
+                     std::function<int(LibRaw&)> run, Mark mark, Napi::Promise::Deferred deferred)
+      : ProcessorAsyncWorker(env, processor, jsThis, stage, deferred), run_(std::move(run)), mark_(mark) {}
+
+ protected:
+  int Run(LibRaw& raw) override { return run_(raw); }
+  Napi::Value BuildResult(Napi::Env env) override {
+    switch (mark_) {
+      case Mark::kUnpacked:
+        MarkUnpacked();
+        break;
+      case Mark::kThumbUnpacked:
+        MarkThumbUnpacked();
+        break;
+      case Mark::kProcessed:
+        MarkProcessed();
+        break;
+      case Mark::kNone:
+        break;
+    }
+    return env.Undefined();
+  }
+
+ private:
+  std::function<int(LibRaw&)> run_;
+  Mark mark_;
+};
+
+// --- image -----------------------------------------------------------------
+// Processor::Image() (processor.cc) allocates/validates the output Buffer on
+// the JS thread *before* constructing this worker (from get_mem_image_format,
+// already available after process()/adjustSizesInfoOnly -- see the task's
+// "image() allocates the output Buffer on the JS thread" requirement); this
+// worker's Run() only calls copy_mem_image into that pre-allocated pointer.
+class ImageWorker : public ProcessorAsyncWorker {
+ public:
+  ImageWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, Napi::Buffer<uint8_t> out, int stride,
+              bool bgr, int width, int height, int colors, int bits, Napi::Promise::Deferred deferred)
+      : ProcessorAsyncWorker(env, processor, jsThis, "image", deferred),
+        outRef_(Napi::Persistent(out)),
+        data_(out.Data()),
+        stride_(stride),
+        bgr_(bgr),
+        width_(width),
+        height_(height),
+        colors_(colors),
+        bits_(bits) {}
+
+ protected:
+  int Run(LibRaw& raw) override { return raw.copy_mem_image(data_, stride_, bgr_ ? 1 : 0); }
+  Napi::Value BuildResult(Napi::Env env) override {
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("width", width_);
+    result.Set("height", height_);
+    result.Set("colors", colors_);
+    result.Set("bits", bits_);
+    result.Set("data", outRef_.Value());
+    return result;
+  }
+
+ private:
+  Napi::Reference<Napi::Buffer<uint8_t>> outRef_;
+  uint8_t* data_;
+  int stride_;
+  bool bgr_;
+  int width_, height_, colors_, bits_;
+};
+
+// --- thumb -------------------------------------------------------------
+// Mirrors ThumbSync (processor.cc): dcraw_make_mem_thumb (Run(), off-thread)
+// allocates a libraw_processed_image_t* via LibRaw's own allocator -- plain
+// malloc'd memory, not a Napi type, so holding the raw pointer across the
+// Execute()->OnOK() handoff is safe. BuildResult() (JS thread) copies it into
+// a fresh V8 Buffer and frees LibRaw's copy with dcraw_clear_mem, exactly as
+// the task's "copy into a fresh Buffer in OnOK and dcraw_clear_mem" says.
+class ThumbWorker : public ProcessorAsyncWorker {
+ public:
+  ThumbWorker(Napi::Env env, Processor* processor, Napi::Object jsThis, Napi::Promise::Deferred deferred)
+      : ProcessorAsyncWorker(env, processor, jsThis, "thumb", deferred) {}
+
+ protected:
+  int Run(LibRaw& raw) override {
+    int errcode = LIBRAW_SUCCESS;
+    img_ = raw.dcraw_make_mem_thumb(&errcode);
+    if (img_ == nullptr) {
+      return errcode != LIBRAW_SUCCESS ? errcode : LIBRAW_UNSPECIFIED_ERROR;
+    }
+    return LIBRAW_SUCCESS;
+  }
+
+  Napi::Value BuildResult(Napi::Env env) override {
+    Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::New(env, img_->data_size);
+    std::memcpy(out.Data(), img_->data, img_->data_size);
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("type", ImageFormatName(img_->type));
+    result.Set("width", img_->width);
+    result.Set("height", img_->height);
+    result.Set("colors", img_->colors);
+    result.Set("bits", img_->bits);
+    result.Set("data", out);
+
+    LibRaw::dcraw_clear_mem(img_);
+    img_ = nullptr;
+    return result;
+  }
+
+ private:
+  libraw_processed_image_t* img_ = nullptr;
+};
+
+}  // namespace libraw_node

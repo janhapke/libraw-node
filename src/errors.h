@@ -38,4 +38,27 @@ void CheckLegacyLibRaw(Napi::Env env, int code, const char* stage);
 void ThrowProcessorError(Napi::Env env, int code, const char* stage);
 void CheckProcessorError(Napi::Env env, int code, const char* stage);
 
+// T07: same shape as ThrowProcessorError/CheckProcessorError above, but
+// *returns* the Napi::Error instead of throwing it. AsyncWorker::OnOK/OnError
+// (src/async_workers.h) run on the JS thread but are not called via the
+// normal N-API call path that node-addon-api wraps in a try/catch to convert
+// a C++ exception into a pending JS exception -- they must hand the error to
+// a Napi::Promise::Deferred::Reject() instead, which needs a napi_value, not
+// a thrown exception. ThrowProcessorError/CheckProcessorError (used by the
+// *Sync methods, where a real C++ throw is correct) are implemented in terms
+// of this.
+Napi::Error MakeProcessorError(Napi::Env env, int code, const char* stage);
+
+// T07: the busy-guard error. Not a LibRaw error code (LibRaw never returns
+// it) -- ERR_LIBRAW_BUSY / -1000001 is this binding's own, documented in
+// lib/errors.cjs, for "a Processor async/sync call was made while another
+// async call on the same Processor is in flight" (docs/plan/tasks.md T07:
+// "Busy guard ... rejects immediately with a LibRawError whose name is
+// ERR_LIBRAW_BUSY; sync accessors throw the same while busy").
+constexpr int kErrLibRawBusyCode = -1000001;
+constexpr const char* kErrLibRawBusyName = "ERR_LIBRAW_BUSY";
+
+Napi::Error MakeBusyError(Napi::Env env, const char* stage);
+void ThrowBusyError(Napi::Env env, const char* stage);
+
 }  // namespace libraw_node
