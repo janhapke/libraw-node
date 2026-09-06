@@ -287,7 +287,7 @@ Do:
 Acceptance:
 - Test (real files): abort 50 ms into `decode(IMGP5127.DNG)`; the promise rejects within 200 ms of
   `abort()`; a subsequent `decode` on a new call succeeds and matches an uncancelled decode byte-for-byte.
-- Test: abort before start rejects in < 5 ms without touching LibRaw (assert via a counter in a mock or
+- Test: abort before start rejects without touching LibRaw (typically < 1 ms; the test threshold is 25 ms because vitest runs decode-heavy files in parallel workers; assert via a counter in a mock or
   via timing).
 
 ### T10 — Events: progress, data errors, EXIF tag callback

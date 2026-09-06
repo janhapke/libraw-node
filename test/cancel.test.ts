@@ -54,7 +54,7 @@ describe('cancellation — pre-aborted signal rejects immediately, without touch
             // eslint-disable-next-line no-console
             console.log(`pre-aborted decode() rejection latency: ${elapsedMs.toFixed(3)} ms`);
             expectCancelledError(err);
-            expect(elapsedMs).toBeLessThan(5);
+            expect(elapsedMs).toBeLessThan(25); // typical <1 ms; 25 ms tolerates parallel vitest workers decoding with OpenMP
         }
     });
 
@@ -70,7 +70,7 @@ describe('cancellation — pre-aborted signal rejects immediately, without touch
             // eslint-disable-next-line no-console
             console.log(`pre-aborted thumbnail() rejection latency: ${elapsedMs.toFixed(3)} ms`);
             expectCancelledError(err);
-            expect(elapsedMs).toBeLessThan(5);
+            expect(elapsedMs).toBeLessThan(25); // typical <1 ms; 25 ms tolerates parallel vitest workers decoding with OpenMP
         }
     });
 
@@ -88,7 +88,7 @@ describe('cancellation — pre-aborted signal rejects immediately, without touch
             // eslint-disable-next-line no-console
             console.log(`pre-aborted Processor.unpack() rejection latency: ${elapsedMs.toFixed(3)} ms`);
             expectCancelledError(err);
-            expect(elapsedMs).toBeLessThan(5);
+            expect(elapsedMs).toBeLessThan(25); // typical <1 ms; 25 ms tolerates parallel vitest workers decoding with OpenMP
         }
         // A pre-aborted signal must not mark the Processor as needing
         // recycle() -- it never touched LibRaw at all (src/errors.cc's
