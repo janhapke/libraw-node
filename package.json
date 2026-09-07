@@ -1,6 +1,6 @@
 {
   "name": "@janhapke/libraw",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "General-purpose Node.js binding for LibRaw",
   "license": "MIT",
   "repository": "github:janhapke/libraw-node",
