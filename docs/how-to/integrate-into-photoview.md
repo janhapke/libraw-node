@@ -98,5 +98,5 @@ immediately.
 
 - `npm test` (update the LibRaw plugin's unit test mocks to `identify`/`thumbnail`/`decode`).
 - Rerun the benchmark harness and compare against the pre-migration CSVs.
-- Real portrait NEF/ORF/DNG files from `.private/testimages` for orientation in both tiers.
+- Real portrait NEF/ORF/DNG files (any local directory, not committed) for orientation in both tiers.
 - `npm run make` on Linux; install the `.deb`; open a RAW folder (the one step needing a display).

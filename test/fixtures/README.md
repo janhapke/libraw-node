@@ -58,10 +58,10 @@ than done speculatively here.
 
 Real-camera RAW files are never committed to this repo. Tests that need one read the `LIBRAW_TEST_IMAGES`
 environment variable (a directory of RAW files) via `test/helpers/fixtures.ts` and skip themselves when it
-is unset. On this development machine, `/home/jan/dev/photoview/.private/testimages` is a valid value:
+is unset. Point it at any local directory of RAW files:
 
 ```bash
-LIBRAW_TEST_IMAGES=/home/jan/dev/photoview/.private/testimages npm test
+LIBRAW_TEST_IMAGES=/path/to/raw/files npm test
 ```
 
 ## Validating a generated DNG manually

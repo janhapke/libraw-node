@@ -328,7 +328,7 @@ files) and skip themselves when it is unset:
 LIBRAW_TEST_IMAGES=/path/to/raw/files npm test
 ```
 
-On this development machine, `/home/jan/dev/photoview/.private/testimages` is a valid value.
+Point it at any local directory of RAW files you have on hand.
 
 `npm run test:stress` (`test/stress.test.ts`, `vitest.stress.config.mts`) runs the T17 concurrency/memory
 stress suite — 6 `worker_threads` × 50 `decode()` calls each against a real RAW file, checksum-verified

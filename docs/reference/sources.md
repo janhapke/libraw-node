@@ -1,5 +1,7 @@
 # Sources
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 Checked 2026-09-03.
 
 ## Local

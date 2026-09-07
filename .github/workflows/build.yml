@@ -616,8 +616,20 @@ jobs:
           fi
           echo "tag v$TAG_VERSION matches package.json version $PKG_VERSION"
 
-      - name: npm publish --provenance
+      - name: Check whether NPM_TOKEN is configured
         if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "NPM_TOKEN_SET=${{ secrets.NPM_TOKEN != '' }}" >> "$GITHUB_ENV"
+
+      # Gated on secrets.NPM_TOKEN being set, not just the tag ref: npm now
+      # requires passkey (WebAuthn) 2FA for interactive publish, so the
+      # maintainer publishes the tagged release manually from this job's
+      # `npm-package` artifact tarball for now (`npm publish <tarball>`) --
+      # tagging a release must not fail this workflow while NPM_TOKEN is
+      # unset. Once a granular automation token (or, later, npm trusted
+      # publishing) is configured, this step picks up automatically; no
+      # workflow change needed then.
+      - name: npm publish --provenance
+        if: startsWith(github.ref, 'refs/tags/v') && env.NPM_TOKEN_SET == 'true'
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

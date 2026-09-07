@@ -16,3 +16,7 @@ test/forge-app/package-lock.json
 # `import 'sharp'` resolve via the normal node_modules walk-up; cleaned up
 # by the test itself, this is only a safety net if a run is interrupted.
 test/.readme-snippet-*/
+
+# Local Claude Code settings (may carry a token) -- already covered by this
+# machine's global git ignore, listed here too as a repo-level safety net.
+.claude/settings.local.json
