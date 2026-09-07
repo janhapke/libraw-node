@@ -1,5 +1,7 @@
 # Adoption comparison: alpha.6 (today) vs lightdrift 1.0.0 vs the self-built binding
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 What photoview would gain at each step. "Measured" refers to the 2026-07-20 benchmark on the 16 MP Pentax
 DNG; everything else is an estimate to be confirmed by re-running `benchmark:run`.
 

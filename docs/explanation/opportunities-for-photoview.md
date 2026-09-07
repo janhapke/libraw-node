@@ -1,5 +1,7 @@
 # Where photoview would gain: more options, more speed
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 Ordered by expected payoff for a photo viewer. Numbers refer to the 16 MP DNG in the 2026-07-20 benchmark
 ([photoview-usage.md](photoview-usage.md)). Estimates marked "expected" are not yet measured; the roadmap
 puts a benchmark gate before each.

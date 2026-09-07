@@ -1,5 +1,7 @@
 # photoview integration points
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 All paths relative to `/home/jan/dev/photoview`. Versions from `package.json` on 2026-09-03.
 
 ## Dependencies

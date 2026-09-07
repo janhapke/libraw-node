@@ -1,5 +1,7 @@
 # How photoview uses LibRaw today
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 photoview (`/home/jan/dev/photoview`, Electron 42.5.0, Electron Forge + webpack) pins
 `lightdrift-libraw@^1.0.0-alpha.6` as a devDependency, rebuilt with `electron-rebuild -f -w lightdrift-libraw`
 (`npm run rebuild`), linking against the system `libraw-dev` (0.21.5 on this machine). File-level detail is in

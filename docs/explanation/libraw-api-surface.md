@@ -74,7 +74,7 @@ All in `imgdata`:
 lightdrift alpha.6 exposes a thin slice of this (`getMetadata`, `getImageSize`, `getLensInfo`,
 `getAdvancedMetadata`, `getColorInfo`). lightdrift 1.0.0 claims a "camelCase mirror of the complete safe
 LibRaw 0.22.2 public surface". A new binding should generate the mirror from the header (see
-[how-to: expose options](../how-to/expose-libraw-options.md)).
+[how-to: expose options](../how-to/set-processing-options.md)).
 
 ## What costs time
 

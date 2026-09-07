@@ -218,7 +218,7 @@ describe.skipIf(!realTestImagesDir)('metadata.makernotes — per-vendor (T14b, L
         // few" caveat) -- only that the object itself is exposed.
     });
 
-    // Rule (documented in docs/how-to/expose-libraw-options.md's T14b
+    // Rule (documented in docs/how-to/set-processing-options.md's T14b
     // correction block): imgdata.makernotes is a plain struct-of-structs,
     // not a tagged union -- LibRaw gives this generator no reliable signal
     // to omit a whole vendor sub-object for a file made by a different

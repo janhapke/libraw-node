@@ -15,7 +15,9 @@ redistributable installed.
 This package is not scoped to any single consumer application — see
 `docs/explanation/adoption-comparison.md` for the design rationale.
 
-Status: early scaffold (see `docs/plan/tasks.md` for the task breakdown driving development).
+Status: full API implemented, tested (`npm test`, `npm run test:stress`), and built on all five platforms
+below in CI (`.github/workflows/build.yml`, including the Electron smoke matrix); not yet published to npm
+— see `docs/plan/tasks.md` for the task breakdown and `CHANGELOG.md` for what shipped.
 
 ## Install
 
@@ -25,6 +27,22 @@ npm i @janhapke/libraw
 
 Prebuilt native binaries ship inside the npm package under `prebuilds/<platform>-<arch>/`; installing
 never runs a compiler on your machine. Requires **Node.js ≥ 22**.
+
+| Platform | Runtime dependency beyond libc | Notes |
+|---|---|---|
+| `linux-x64` | `libgomp.so.1` (GCC's OpenMP runtime) | Every Linux system with a GCC toolchain already has it |
+| `linux-arm64` | `libgomp.so.1` | Same as `linux-x64`; built natively for aarch64 (no cross toolchain) |
+| `darwin-x64` | none | OpenMP (`libomp`) linked statically — no extra runtime dependency |
+| `darwin-arm64` | none | Same, native Apple Silicon build |
+| `win32-x64` | `VCOMP140.dll` (part of the Visual C++ Redistributable) | MSVC ships no static OpenMP runtime at all; any MSVC-built Electron/Node app generally already needs the redistributable |
+
+On Linux, `libgomp.so.1` (used for parallel demosaic) is the one dynamic dependency beyond
+libc/libm/libpthread/libdl — see the `target_link_libraries(addon PRIVATE gomp)` comment in
+`CMakeLists.txt` for why it cannot be statically linked into a shared object with this toolchain. On
+Windows, `VCOMP140.dll` is the equivalent dynamic dependency for the same reason — MSVC ships no static
+OpenMP runtime at all; see [Building from source](#building-from-source) and
+`docs/reference/build-matrix.md` for the full picture, including what happens on machines without that
+redistributable installed.
 
 Under **Electron**, the addon needs no special handling beyond what any Node-API native module needs —
 see `docs/how-to/make-the-addon-electron-safe.md` for the full checklist and
@@ -44,29 +62,35 @@ below). Decode a RAW file and re-encode a preview as JPEG via `sharp`:
 
 **ESM**
 
+<!-- quickstart:esm -->
 ```js
 import { decode } from '@janhapke/libraw';
 import sharp from 'sharp';
 import { readFile, writeFile } from 'node:fs/promises';
 
-const buffer = await readFile('photo.NEF');
+const file = process.argv[2] ?? 'photo.NEF';
+const buffer = await readFile(file);
 const image = await decode(buffer, { params: { use_camera_wb: true } });
 const jpeg = await image.toSharp(sharp).resize({ width: 1620, fit: 'inside' }).jpeg({ quality: 90 }).toBuffer();
 await writeFile('preview.jpg', jpeg);
+console.log('PASS', image.width, image.height);
 ```
 
 **CommonJS**
 
+<!-- quickstart:cjs -->
 ```js
 const { decode } = require('@janhapke/libraw');
 const sharp = require('sharp');
 const fs = require('node:fs/promises');
 
 (async () => {
-  const buffer = await fs.readFile('photo.NEF');
+  const file = process.argv[2] ?? 'photo.NEF';
+  const buffer = await fs.readFile(file);
   const image = await decode(buffer, { params: { use_camera_wb: true } });
   const jpeg = await image.toSharp(sharp).resize({ width: 1620, fit: 'inside' }).jpeg({ quality: 90 }).toBuffer();
   await fs.writeFile('preview.jpg', jpeg);
+  console.log('PASS', image.width, image.height);
 })();
 ```
 
@@ -137,7 +161,7 @@ JSDoc are generated into `types/index.d.ts`.
 
 Cancellation: pass `{ signal }` (a standard `AbortSignal`) to any async method or module-level helper.
 Aborting rejects the pending promise with a `LibRawError` (`name: 'LIBRAW_CANCELLED_BY_CALLBACK'`,
-`aborted: true`); see `docs/how-to/implement-async-decode-with-cancellation.md`.
+`aborted: true`); see `docs/how-to/cancel-and-track-progress.md`.
 
 Events: `'progress'` (`{ stage, iteration, expected }`), `'dataError'` (`{ offset, message }`), and —
 only when constructed with `{ exifTags: true }` — `'exifTag'` (`{ tag, type, len, ordering }`). Buffered
@@ -221,7 +245,7 @@ sample depth from the buffer's typed-array class rather than an option key). For
 package never `require`s `sharp` — it is an optional peer dependency
 (`peerDependenciesMeta.sharp.optional: true`); `toSharp`'s type is a structural
 `<S extends (input: Buffer, options?) => any>(sharp: S) => ReturnType<S>`, not sharp's own types. See
-`docs/how-to/integrate-into-photoview.md` ("Sharp interop") for the full rationale.
+`docs/how-to/use-with-sharp-and-worker-threads.md` ("Sharp interop") for the full rationale.
 
 ## Concurrency and threads
 
@@ -232,7 +256,7 @@ can run truly concurrently — there is no shared LibRaw state between them (T17
 calls, with every result's checksum verified against a single-threaded reference).
 
 - **libuv threadpool size.** Node's threadpool defaults to **4** threads (`UV_THREADPOOL_SIZE`, up to
-  1024 — see `docs/how-to/implement-async-decode-with-cancellation.md`). More than 4 concurrent
+  1024 — see `docs/how-to/cancel-and-track-progress.md`). More than 4 concurrent
   `decode`/`identify`/`thumbnail` calls (or `Processor` async calls) queue
   behind that limit rather than truly overlapping. `UV_THREADPOOL_SIZE` must be set in the environment
   **before Node's first async call that uses the threadpool** — setting `process.env.UV_THREADPOOL_SIZE`
@@ -284,7 +308,7 @@ and CMake/Ninja). Both are what `.github/workflows/build.yml`'s `build-macos`/`b
 see those scripts' own header comments for the platform-specific details (node.lib synthesis and the
 delay-load hook on Windows, static `libomp` linking on macOS).
 
-See `docs/how-to/build-libraw-addon-in-docker.md` for what the Docker image contains and why, and
+See `docs/how-to/build-from-source.md` for what the Docker image contains and why, and
 `docs/explanation/build-and-distribution-strategy.md` for the overall prebuild strategy.
 
 ## Testing

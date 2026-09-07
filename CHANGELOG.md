@@ -4,9 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-07
+
 Everything below is implemented and covered by CI (`.github/workflows/build.yml`, green on all five
-platforms) as of T23; nothing has been published to npm yet. See `docs/plan/tasks.md` for the full task
-breakdown this summarizes.
+platforms). See `docs/plan/tasks.md` for the full task breakdown this summarizes.
 
 ### Phase 0 — Scaffold, Linux build in Docker, first decode, OpenMP
 
@@ -58,3 +59,25 @@ breakdown this summarizes.
   step proving the packed tarball's prebuild actually loads after a fresh install, and
   `npm publish --provenance --access public` gated on `v*` tags (`scripts/release.sh` drives the local
   side of a release: version bump, CHANGELOG check, commit, tag).
+
+### Phase 4 — Electron hardening and packaging proof
+
+- `scripts/electron-safety.sh`: one entry point running the platform binary check, a forbidden-include
+  grep, `buildInfo` sanity checks, and the Electron smoke scripts together, with a `PASS`/`FAIL` summary.
+- A minimal Electron Forge app (`test/forge-app/`) and `scripts/forge-asar-check.sh` proving the native
+  `.node` file is unpacked from `app.asar` and genuinely loads from `app.asar.unpacked`, not merely present.
+- `src/win_delay_load_hook.cc`'s `DllMain(DLL_PROCESS_ATTACH)` fix for an MSVC delay-load-runtime race that
+  could silently kill several `worker_threads` doing their first `require()` of the addon concurrently
+  under Electron on Windows; `test/electron-workers-cold-smoke.cjs` is the permanent regression guard,
+  run on all five CI test jobs.
+
+### Phase 5 — Benchmark tool, docs, photoview integration hand-off
+
+- `scripts/bench.cjs` (`npm run bench`): times `identify()`/`thumbnail()`/`decode()` at three settings plus
+  a per-stage breakdown against a directory of real RAW files, printing an environment header
+  (`buildInfo`, CPU, `OMP_NUM_THREADS`, `UV_THREADPOOL_SIZE`) and writing full results to `bench/`.
+- Documentation pass: tutorials and how-to guides rewritten against the shipped API (every snippet runs as
+  written against this package); `docs/README.md` split into maintained user documentation and unmaintained
+  design history; `scripts/check-links.js` (`npm run docs:check`) verifying every relative Markdown
+  link/image across `README.md` and `docs/**`; `test/readme-snippet.test.ts` executing the README's quick
+  start snippets against the synthetic fixture as part of `npm test`.

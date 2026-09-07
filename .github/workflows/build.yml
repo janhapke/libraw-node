@@ -146,6 +146,14 @@ jobs:
         if: matrix.arch == 'x64'
         run: ./scripts/forge-asar-check.sh
 
+      # T26: every relative Markdown link/image in README.md and docs/**
+      # resolves (scripts/check-links.js). x64-only, same reasoning as the
+      # two Electron/Forge checks above -- this is a repo-content check, not
+      # something that depends on the built binary or the CPU architecture.
+      - name: Docs link check (scripts/check-links.js)
+        if: matrix.arch == 'x64'
+        run: npm run docs:check
+
   # T20: macOS x64/arm64. No Docker path here (Xcode/macOS SDK use requires
   # Apple hardware), so these run directly on the two GitHub-hosted macOS
   # runners named in docs/reference/build-matrix.md. Both targets build,

@@ -10,3 +10,9 @@ dist/
 out/
 test/forge-app/pm5544-768x576.dng
 test/forge-app/package-lock.json
+
+# T26: test/readme-snippet.test.ts writes each extracted README snippet to a
+# temp file inside the repo (not the OS tmpdir) so `require('sharp')`/
+# `import 'sharp'` resolve via the normal node_modules walk-up; cleaned up
+# by the test itself, this is only a safety net if a run is interrupted.
+test/.readme-snippet-*/

@@ -13,6 +13,20 @@ binaries on any machine or CI runner; artifacts that work in Node and Electron o
 | win32-arm64 | Same as above | Rarely needed for photoview | Low priority |
 | darwin-x64 / darwin-arm64 | Possible, not standard | Zig (`zig cc`) ships macOS libc headers and `lld` can link Mach-O with `-undefined dynamic_lookup`; LibRaw needs no Apple frameworks. `cargo-zigbuild` publishes Docker images that do this for Rust; `solarwinds/zig-build` does it for Node addons (52 stars, young). Code signing happens later at app packaging, so unsigned cross-built `.node` files are fine. | Medium-low (unproven for this exact stack) |
 
+> **Correction (T19–T21):** as shipped, none of the three "Docker on a Linux host" cells above except
+> `linux-x64` reflect what was actually built. `linux-arm64` did ship via Docker, but not via an
+> `aarch64-linux-gnu` cross toolchain — T19 found Rocky 8/EPEL ship no usable aarch64 cross sysroot at all;
+> `docker buildx build --platform linux/arm64` instead runs the *same* Dockerfile as a native aarch64
+> container (QEMU locally, native on `ubuntu-24.04-arm` in CI) — see
+> [Build from source](../how-to/build-from-source.md). `win32-x64` and `darwin-*` are **not** built in
+> Docker at all: per the "Recommendation" section below (which this correction confirms is what actually
+> shipped), they build natively on GitHub-hosted `windows-2022`/`macos-15-intel`/`macos-15` runners with
+> MSVC 2022 and Xcode clang respectively — no cross toolchain, no Zig. The "Not pursued" Zig plan further
+> down was never revisited — OpenMP shipped directly in T20/T21 (static `libomp.a` on macOS, dynamic
+> `VCOMP140.dll` on Windows — see [Build from source](../how-to/build-from-source.md)), so the Phase 6
+> fallback task (T28, "static OpenMP runtimes on macOS and Windows", scheduled only if T20/T21 shipped
+> without it) was never needed.
+
 `sharp-libvips` is the reference point: it builds **all Linux and all Windows** libvips binaries inside
 Docker (Windows via llvm-mingw cross toolchain) and only macOS natively on macOS runners. `sharp`'s own
 thin addon is then built per OS on GitHub runners (windows-2022, macos-15, Rocky 8 container on Ubuntu).

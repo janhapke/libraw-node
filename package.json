@@ -44,7 +44,8 @@
     "bench": "node scripts/bench.cjs",
     "test:stress": "NODE_OPTIONS=--expose-gc vitest run --config vitest.stress.config.mts --reporter=verbose",
     "test:electron": "node scripts/run-electron.cjs test/electron-smoke.cjs test/electron-workers-smoke.cjs test/electron-workers-cold-smoke.cjs",
-    "electron:safety": "./scripts/electron-safety.sh"
+    "electron:safety": "./scripts/electron-safety.sh",
+    "docs:check": "node scripts/check-links.js"
   },
   "dependencies": {
     "@types/node": "^24.13.3",

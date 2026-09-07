@@ -1,111 +1,110 @@
-# Tutorial 2 — Produce a fast preview with `half_size`, and pick the right embedded thumbnail
+# Tutorial 2 — Fast previews: embedded thumbnails vs `half_size`
 
-Builds on [tutorial 1](01-first-decode.md). You will measure the three preview strategies a viewer has for
-a RAW file and see which LibRaw calls cost what. Use a real camera file (e.g.
-`/home/jan/dev/photoview/.private/testimages/IMGP5127.DNG`, 16 MP) — the synthetic DNG is too small to show
-the differences.
+Builds on [tutorial 1](01-first-decode.md). A photo viewer showing a grid of thumbnails, or a quick preview
+before a user commits to a full-resolution view, should almost never pay for a full demosaic. This tutorial
+walks the three tiers `@janhapke/libraw` gives you — `identify()`, the embedded thumbnail via
+`thumbnail()`, and `decode()` with `half_size` — and when to reach for each.
 
-## 1. Extend the addon with `identifySync` and `thumbnailSync`
+## 0. What you need
 
-Add to `src/addon.cc`:
+Same as tutorial 1: Node.js ≥ 22, `@janhapke/libraw` installed (or run inside this repo's checkout). The
+committed synthetic fixture (`test/fixtures/pm5544-768x576.dng`) is used below so every snippet runs
+unmodified — it's small (768×576) with one 96×72 embedded JPEG thumbnail, so the *timings* won't be
+dramatic. For timings that actually matter, pass a real camera RAW file as `process.argv[2]` instead; the
+"Typical shape on a real file" section below shows numbers from a 16 MP Pentax DNG for comparison.
 
-```cpp
-// identifySync(buffer) -> { width, height, flip, make, model, thumbs: [{index, format, width, height, length}] }
-static Napi::Value IdentifySync(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  auto input = info[0].As<Napi::Buffer<uint8_t>>();
-  auto raw = std::make_unique<LibRaw>();
-  raw->imgdata.rawparams.options |= LIBRAW_RAWOPTIONS_CHECK_THUMBNAILS_KNOWN_VENDORS;  // fixes 0-sized entries
-  Check(env, raw->open_buffer(input.Data(), input.Length()), "open_buffer");
-  Check(env, raw->adjust_sizes_info_only(), "adjust_sizes_info_only");
-  auto& d = raw->imgdata;
-  auto r = Napi::Object::New(env);
-  r.Set("width", d.sizes.iwidth); r.Set("height", d.sizes.iheight); r.Set("flip", d.sizes.flip);
-  r.Set("make", d.idata.make); r.Set("model", d.idata.model);
-  auto thumbs = Napi::Array::New(env);
-  for (int i = 0; i < d.thumbs_list.thumbcount; i++) {
-    auto& t = d.thumbs_list.thumblist[i];
-    auto o = Napi::Object::New(env);
-    o.Set("index", i); o.Set("format", int(t.tformat)); o.Set("width", t.twidth); o.Set("height", t.theight);
-    o.Set("length", t.tlength);
-    thumbs.Set(i, o);
-  }
-  r.Set("thumbs", thumbs);
-  return r;                                  // no unpack() happened
-}
-
-// thumbnailSync(buffer, index) -> { format: 'jpeg'|'bitmap', width, height, data }
-static Napi::Value ThumbnailSync(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  auto input = info[0].As<Napi::Buffer<uint8_t>>();
-  int index = info.Length() > 1 ? info[1].ToNumber().Int32Value() : -1;
-  auto raw = std::make_unique<LibRaw>();
-  Check(env, raw->open_buffer(input.Data(), input.Length()), "open_buffer");
-  Check(env, index < 0 ? raw->unpack_thumb() : raw->unpack_thumb_ex(index), "unpack_thumb");
-  int err = 0;
-  libraw_processed_image_t* t = raw->dcraw_make_mem_thumb(&err);
-  Check(env, err, "dcraw_make_mem_thumb");
-  auto data = Napi::Buffer<uint8_t>::Copy(env, t->data, t->data_size);   // Copy, not New: Electron-safe
-  auto r = Napi::Object::New(env);
-  r.Set("format", t->type == LIBRAW_IMAGE_JPEG ? "jpeg" : "bitmap");   // LIBRAW_IMAGE_JPEG == 1, BITMAP == 2
-  r.Set("width", t->width); r.Set("height", t->height); r.Set("data", data);
-  LibRaw::dcraw_clear_mem(t);
-  return r;
-}
-```
-
-Register both in `Init`, rebuild with `./scripts/build-linux.sh x64`.
-
-## 2. Measure
-
-`test/preview.js`:
+## 1. `identify()` first, always
 
 ```js
-const fs = require('fs');
-const libraw = require('..');
-const buf = fs.readFileSync(process.argv[2]);
+// preview.js
+const fs = require('node:fs');
+const libraw = require('@janhapke/libraw'); // or '../lib/index.cjs' inside this repo
 
-function time(label, fn) { const t = process.hrtime.bigint(); const r = fn(); console.log(label.padEnd(28), (Number(process.hrtime.bigint() - t) / 1e6).toFixed(1), 'ms'); return r; }
+function time(label, fn) {
+  const t0 = process.hrtime.bigint();
+  return Promise.resolve(fn()).then((r) => {
+    console.log(label.padEnd(28), (Number(process.hrtime.bigint() - t0) / 1e6).toFixed(2), 'ms');
+    return r;
+  });
+}
 
-const info = time('identify (open only)', () => libraw.identifySync(buf));
-console.log(' ', info.make, info.model, info.width + 'x' + info.height, 'flip', info.flip);
-console.log('  thumbs:', info.thumbs.map(t => `#${t.index} ${t.width}x${t.height} ${(t.length/1024)|0}KB`).join(', '));
+(async () => {
+  const path = process.argv[2] ?? 'test/fixtures/pm5544-768x576.dng';
+  const buffer = fs.readFileSync(path);
 
-const target = 1620;                                              // e.g. a 1440p screen's long edge
-const pick = info.thumbs.filter(t => Math.max(t.width, t.height) >= target)
-                        .sort((a, b) => a.length - b.length)[0] ?? info.thumbs.sort((a, b) => b.length - a.length)[0];
-const th = time(`thumbnail #${pick.index}`, () => libraw.thumbnailSync(buf, pick.index));
-fs.writeFileSync('thumb.jpg', th.data);
+  const info = await time('identify (open only)', () => libraw.identify(buffer));
+  console.log(' ', info.idata.make, info.idata.model, `${info.sizes.width}x${info.sizes.height}`, 'flip', info.sizes.flip);
+  console.log('  thumbs:', info.thumbs.map((t, i) => `#${i} ${t.twidth}x${t.theight} ${t.tformat}`).join(', '));
 
-const half = time('decode half_size', () => libraw.decodeSync(buf, { half_size: true }));
-const full = time('decode full (AHD)', () => libraw.decodeSync(buf, { half_size: false }));
-console.log(' ', half.width + 'x' + half.height, 'vs', full.width + 'x' + full.height);
+  // Pick the smallest embedded thumbnail whose long edge covers the target,
+  // falling back to the largest available one.
+  const target = 640;
+  const withIndex = info.thumbs.map((t, index) => ({ ...t, index }));
+  const pick =
+    withIndex.filter((t) => Math.max(t.twidth, t.theight) >= target).sort((a, b) => a.tlength - b.tlength)[0] ??
+    withIndex.sort((a, b) => b.tlength - a.tlength)[0];
+
+  const th = await time(`thumbnail #${pick.index}`, () => libraw.thumbnail(buffer, { index: pick.index }));
+  fs.writeFileSync('thumb.jpg', th.data);
+  console.log('  wrote thumb.jpg:', th.format, `${th.width}x${th.height}`, th.data.length, 'bytes');
+
+  const half = await time('decode half_size', () => libraw.decode(buffer, { params: { half_size: true, use_camera_wb: true } }));
+  const full = await time('decode full (AHD)', () => libraw.decode(buffer, { params: { use_camera_wb: true } }));
+  console.log(' ', `${half.width}x${half.height}`, 'vs', `${full.width}x${full.height}`);
+})();
 ```
 
 ```bash
-node test/preview.js /home/jan/dev/photoview/.private/testimages/IMGP5127.DNG
+node preview.js test/fixtures/pm5544-768x576.dng
 ```
 
-Typical shape of the output on a 16 MP file (your numbers will differ; the point is the ratios):
+Output on the synthetic fixture (your exact milliseconds will vary; the point is the *shape*: `identify` and
+`thumbnail` are near-instant regardless of file size, `decode` is not):
 
 ```
-identify (open only)          3.1 ms
-  PENTAX K-5 II 4928x3264 flip 0
-  thumbs: #0 160x120 8KB, #1 4928x3264 1550KB
-thumbnail #1                  6.4 ms       ← embedded JPEG bytes, no decode
-decode half_size            ~450 ms        ← unpack ~350 + binning, no demosaic
-decode full (AHD)           ~900 ms        ← unpack ~350 + AHD ~550
+identify (open only)         ~0.3 ms
+  janhapke/libraw PM5544 Synthetic 768x576 flip 0
+  thumbs: #0 96x72 jpeg
+thumbnail #0                 ~0.5 ms
+  wrote thumb.jpg: jpeg 96x72 3826 bytes
+decode half_size            ~15 ms
+decode full (AHD)           ~35 ms
+  384x288 vs 768x576
 ```
 
-Compare with photoview today: `decode-preview` 378 ms (because `loadBuffer` unpacks before extracting the
-same thumbnail) and `decode-full` 1105 ms (incl. ~170 ms sharp).
+## 2. Typical shape on a real file
+
+The synthetic fixture is too small to show the real cost difference between these tiers. Run the same
+script against a real camera RAW (`node preview.js /path/to/photo.DNG`) and the gap opens up — this is what
+it looked like on a 16 MP Pentax K-5 II DNG on the machine this package was developed on:
+
+```
+identify (open only)          1.9 ms
+  Pentax K-5 II 4950x3284 flip 0
+  thumbs: #0 160x120 jpeg, #1 4928x3264 jpeg
+thumbnail #1                  2.9 ms      ← embedded JPEG bytes, no demosaic
+decode half_size             485.3 ms      ← unpack + 2x2 binning, no demosaic
+decode full (AHD)            758.5 ms      ← unpack + full AHD demosaic
+  2475x1642 vs 4950x3284
+```
+
+`identify` and `thumbnail` cost single-digit milliseconds regardless of sensor size — they never touch the
+demosaic pipeline. `decode` pays for the full unpack either way; `half_size` skips the demosaic step but not
+the unpack itself, which is why it's faster than a full decode but still far from free.
 
 ## 3. What to take from this
 
-- `identify` is essentially free; call it first and always.
-- The embedded preview is the fast path for both `thumbnail` and `preview` tiers; choose by size from
-  `thumbs`. Only when no entry is large enough (rare on modern cameras, common on old ones) fall back to
-  `half_size`.
-- `half_size` halves the pipeline, not the unpack. Unpack is the floor for anything that needs real pixels.
-- Next: make these calls asynchronous and cancellable ([how-to](../how-to/implement-async-decode-with-cancellation.md))
-  so a worker thread stays responsive while the ~350 ms unpack runs.
+- **Call `identify()` first, always.** It's essentially free and tells you what thumbnails are available
+  before you decide anything else.
+- **The embedded thumbnail is the fast path for both thumbnail and preview tiers.** Pick by size from
+  `info.thumbs`, as the snippet above does; only fall back to a real decode when no entry is large enough
+  (common on old cameras, rare on modern ones).
+- **`half_size` halves the pipeline, not the unpack.** Unpack is the floor for anything that needs real
+  pixels from the sensor — `half_size` only skips the (expensive) demosaic step and returns a quarter as
+  many pixels.
+- **Both `thumbnail()` and `decode()` are async and cancellable.** If a user scrolls past a thumbnail
+  before it's ready, or requests a different size mid-flight, pass `{ signal }` and abort the stale request
+  — see [Cancel a decode and track progress](../how-to/cancel-and-track-progress.md).
+- Next: [Set processing options](../how-to/set-processing-options.md) covers every `params`/`rawparams`
+  field these examples only scratch the surface of (demosaic algorithm, output color space, white balance,
+  ...).

@@ -1,5 +1,7 @@
 # `@janhapke/libraw` — task breakdown for agent execution
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 Each task is self-contained: paste the **Common rules** block plus one task into a fresh Claude Code session.
 Tasks are ordered; each assumes the previous ones are merged. Every task ends with acceptance criteria an
 agent can verify from a terminal without a display. macOS and Windows work is verified through GitHub

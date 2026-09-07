@@ -1,5 +1,7 @@
 # Proposed API of the new binding (draft for discussion)
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 Design goals: staged and fused entry points, every call off-thread, options passed up front, one copy
 out, LibRaw's own names for parameters, TypeScript-first.
 

@@ -1,5 +1,7 @@
 # How to migrate photoview from lightdrift-libraw 1.0.0-alpha.6 to 1.0.0 (spec input)
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 Copy of the instruction set handed to the photoview JDD session on 2026-09-03. See the chat transcript of
 that date for the version sent; this file is the canonical copy. Facts about 1.0.0 come from its `master`
 source (`lib/stable/index.ts`, `lib/stable/metadata.ts`, `src/libraw_wrapper.cpp`, `binding.gyp`,

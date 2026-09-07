@@ -3,7 +3,7 @@
 | Target | Where built (Phase A) | Toolchain | Baseline | Artifact |
 |---|---|---|---|---|
 | linux-x64 | Docker on any host | `rockylinux/rockylinux:8-ubi-init` + `gcc-toolset-14`, CMake ≥ 3.25 | glibc 2.28 | `prebuilds/linux-x64/node.napi.node` |
-| linux-arm64 | Docker on any host | same image, built natively for arm64 via `buildx --platform linux/arm64` (QEMU locally, native on `ubuntu-24.04-arm` in CI) -- no cross toolchain: Rocky 8/gcc-toolset-14 ships no aarch64 cross sysroot (T19, see `docs/how-to/build-libraw-addon-in-docker.md` §6) | glibc 2.28 | `prebuilds/linux-arm64/node.napi.node` |
+| linux-arm64 | Docker on any host | same image, built natively for arm64 via `buildx --platform linux/arm64` (QEMU locally, native on `ubuntu-24.04-arm` in CI) -- no cross toolchain: Rocky 8/gcc-toolset-14 ships no aarch64 cross sysroot (T19, see `docs/how-to/build-from-source.md` §6) | glibc 2.28 | `prebuilds/linux-arm64/node.napi.node` |
 | darwin-x64 | GitHub `macos-15-intel` | Xcode clang, `MACOSX_DEPLOYMENT_TARGET=11.0` | macOS 11 | `prebuilds/darwin-x64/node.napi.node` |
 | darwin-arm64 | GitHub `macos-15` | same | macOS 11 | `prebuilds/darwin-arm64/node.napi.node` |
 | win32-x64 | GitHub `windows-2022` | MSVC 2022, `/EHsc /MD` (dynamic release CRT, matches Node/Electron), Ninja + CMake (`scripts/build-native.ps1`) | Windows 10 | `prebuilds/win32-x64/node.napi.node` |

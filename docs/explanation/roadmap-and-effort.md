@@ -1,5 +1,7 @@
 # Roadmap and effort
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 **Goal (confirmed 2026-09-03): `@janhapke/libraw` is a general-purpose open-source binding, not a photoview-only
 shim.** photoview is the first consumer and the benchmark, but the scope is the full safe LibRaw surface
 (all `params` and `rawparams`, metadata and makernotes mirror, `thumbs_list`, warnings, capabilities), generated
@@ -104,7 +106,7 @@ tarball pin + CI run; expect two per year.
 1. Package name: **`@janhapke/libraw`** (`libraw` on npm is taken by the 2017 package); GitHub repository
    **`janhapke/libraw-node`**.
 2. Output interop: **return plain RGB buffers and make them drop-in `sharp` inputs**; no native JPEG encoder
-   in v1. See [sharp interop](../how-to/integrate-into-photoview.md#sharp-interop). A vendored
+   in v1. See [sharp interop](../how-to/use-with-sharp-and-worker-threads.md#sharp-interop). A vendored
    libjpeg-turbo *encoder* stays a possible later extra (~1 day) if profiling shows the sharp encode step matters.
 3. Windows arm64: **not a target**.
 4. Build hosting: **Docker for Linux, GitHub runners for macOS and Windows** is the final state. No Zig

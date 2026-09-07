@@ -1,5 +1,7 @@
 # lightdrift-libraw: alpha.6 (installed in photoview) vs 1.0.0 (npm `latest`)
 
+> **Design history:** written before implementation; see [README](../../README.md) / the generated reference docs for the shipped API.
+
 | Aspect | 1.0.0-alpha.6 (2026-01-06) | 1.0.0 (2026-08-15) |
 |---|---|---|
 | LibRaw | System `libraw-dev` on Linux/macOS (0.21.5 here); bundled 0.21.4 DLL on Windows | Vendored 0.22.2 source compiled into the addon, `USE_ZLIB` only (no libjpeg, no LCMS, no OpenMP) |
