@@ -128,7 +128,30 @@ Runner names follow what `sharp` and lightdrift use in 2026 (`macos-15-intel`, `
 
 ## 5. Release checklist
 
-1. Bump `scripts/versions.env` and submodules; update `api/params.json` if the header diff script fails.
-2. Tag `vX.Y.Z`; CI builds, tests on five targets, publishes with provenance.
-3. Update `THIRD_PARTY_NOTICES.md` (generated) and the CHANGELOG (LibRaw version, capabilities).
-4. In photoview: `npm i @janhapke/libraw@X.Y.Z`, run the benchmark harness, compare the CSVs.
+**As implemented in T23** (`scripts/release.sh`, the `package` job in `.github/workflows/build.yml`):
+
+1. If this release bumps a vendored version: update `scripts/versions.env` and the matching submodule
+   pin first, and re-run `npm run gen` (this regenerates `THIRD_PARTY_NOTICES.md` via
+   `scripts/gen-notices.js` among everything else) — commit that separately from the release commit.
+2. Add a `## [X.Y.Z]` section to `CHANGELOG.md` (move the `Unreleased` content under it, or write a new
+   one) — `scripts/release.sh` checks for this heading and refuses to proceed without it (interactively
+   confirmable, or a hard failure with `--yes`).
+3. On a clean `main`: `scripts/release.sh X.Y.Z`. This runs `npm run gen:check`, `npm test`, bumps
+   `package.json`/`package-lock.json` (`npm version X.Y.Z --no-git-tag-version`, no commit/tag from npm
+   itself), checks the CHANGELOG section from step 2, then commits `release: vX.Y.Z` and creates the
+   annotated tag `vX.Y.Z`. It never pushes on its own (pass `--push` to do so, or run the printed
+   `git push origin main --follow-tags` by hand) and never runs `npm publish` — publishing only happens
+   in CI. `scripts/release.sh X.Y.Z --dry-run` rehearses the checks and version bump without committing,
+   tagging, or leaving any change in the working tree.
+4. `git push origin main --follow-tags` pushes both the release commit and the tag. The tag push
+   triggers `.github/workflows/build.yml` on the `tags: ['v*']` filter; the `package` job (`needs:
+   [test-linux, test-macos, test-windows]`, i.e. it only runs once every platform's build *and* test jobs
+   are green) downloads all five `prebuilds-*` artifacts, re-checks `THIRD_PARTY_NOTICES.md`
+   (`node scripts/gen-notices.js --check`), runs `npm pack`, installs the resulting tarball into a fresh
+   temp directory and sanity-checks the ESM/CJS entry points plus `decodeSync` actually resolving
+   (proving the packed prebuild loads, not just that the tarball contains files), uploads it as the
+   `npm-package` artifact, then — only on the `refs/tags/v*` ref, and only after confirming the tag's
+   version equals `package.json`'s version (failing loudly otherwise) — runs
+   `npm publish --provenance --access public` with `id-token: write` / `contents: read` job permissions
+   and `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`.
+5. In photoview: `npm i @janhapke/libraw@X.Y.Z`, run the benchmark harness, compare the CSVs.

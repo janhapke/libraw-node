@@ -36,8 +36,10 @@
     "gen:metadata-cc": "node scripts/gen-metadata-cc.js",
     "gen:types": "node scripts/gen-types.js",
     "gen:docs": "node scripts/gen-docs.js",
-    "gen": "npm run gen:errors && npm run gen:progress && npm run gen:enums && npm run gen:manifest && npm run gen:params-cc && npm run gen:metadata && npm run gen:metadata-cc && npm run gen:types && npm run gen:docs",
-    "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-enums.js --check && node scripts/gen-manifest.js --check && node scripts/gen-params-cc.js --check && node scripts/gen-metadata.js --check && node scripts/gen-metadata-cc.js --check && node scripts/gen-types.js --check && node scripts/gen-docs.js --check",
+    "gen:notices": "node scripts/gen-notices.js",
+    "gen:notices:check": "node scripts/gen-notices.js --check",
+    "gen": "npm run gen:errors && npm run gen:progress && npm run gen:enums && npm run gen:manifest && npm run gen:params-cc && npm run gen:metadata && npm run gen:metadata-cc && npm run gen:types && npm run gen:docs && npm run gen:notices",
+    "gen:check": "node scripts/gen-errors.js --check && node scripts/gen-progress.js --check && node scripts/gen-enums.js --check && node scripts/gen-manifest.js --check && node scripts/gen-params-cc.js --check && node scripts/gen-metadata.js --check && node scripts/gen-metadata-cc.js --check && node scripts/gen-types.js --check && node scripts/gen-docs.js --check && node scripts/gen-notices.js --check",
     "test": "vitest run --reporter=verbose",
     "test:stress": "NODE_OPTIONS=--expose-gc vitest run --config vitest.stress.config.mts --reporter=verbose",
     "test:electron": "node scripts/run-electron.cjs test/electron-smoke.cjs test/electron-workers-smoke.cjs"

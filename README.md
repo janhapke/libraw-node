@@ -311,6 +311,34 @@ see the [Concurrency and threads](#concurrency-and-threads) section above:
 LIBRAW_TEST_IMAGES=/path/to/raw/files npm run test:stress
 ```
 
+## Releasing
+
+Releases are cut from a clean `main` with `scripts/release.sh` (T23), then published by CI:
+
+```bash
+scripts/release.sh 0.1.0             # interactive: gen:check, npm test, version bump, CHANGELOG
+                                      # confirmation, commit "release: v0.1.0", tag v0.1.0
+git push origin main --follow-tags   # printed by the script, never run automatically
+```
+
+Pushing the `vX.Y.Z` tag triggers `.github/workflows/build.yml`'s `package` job (after every platform's
+build + test jobs are green), which regenerates and checks `THIRD_PARTY_NOTICES.md`
+(`scripts/gen-notices.js --check`), verifies the tag matches `package.json`'s version, and runs
+`npm publish --provenance --access public` using the `NPM_TOKEN` secret. See
+[`docs/how-to/set-up-prebuilds-and-ci.md`](./docs/how-to/set-up-prebuilds-and-ci.md) §5 for the full
+checklist, including bumping `scripts/versions.env`/submodules first when the release includes a vendored
+version bump.
+
+`scripts/release.sh <version> --dry-run` rehearses steps 2–5 (checks, version bump, CHANGELOG check)
+without committing, tagging, or leaving any change in the working tree — useful to validate a version
+string and confirm the CHANGELOG entry exists before doing it for real. `--yes` skips the interactive
+CHANGELOG confirmation (fails instead of prompting if the section is missing); `--push` runs the `git
+push` above automatically instead of only printing it.
+
+Locally, `npm pack --dry-run` and `npm publish --dry-run` are useful sanity checks before tagging — see
+`docs/how-to/set-up-prebuilds-and-ci.md` for what each is expected to report (only the Linux prebuilds
+present locally, so the reported size is smaller than what CI's `package` job reports with all five).
+
 ## License
 
 MIT for the binding itself. Vendored/linked components carry their own licences:

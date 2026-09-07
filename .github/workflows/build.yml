@@ -1,7 +1,18 @@
 name: build
 
 on:
-  push: {}
+  push:
+    # T23: `branches: ['**']` preserves the previous unfiltered `push: {}`
+    # behaviour of triggering on a push to *any* branch (including names
+    # with slashes, e.g. `task/T23-package-release`) -- per the GitHub
+    # Actions push-event docs, specifying only `tags` without `branches`
+    # would otherwise stop branch pushes from triggering this workflow at
+    # all, which would break every existing `task/*` branch's CI run.
+    # `tags: ['v*']` adds the `package` job's release trigger.
+    branches:
+      - '**'
+    tags:
+      - 'v*'
   pull_request: {}
   workflow_dispatch: {}
 
@@ -358,3 +369,142 @@ jobs:
 
       - name: dumpbin /DEPENDENTS
         run: dumpbin /DEPENDENTS prebuilds/win32-x64/node.napi.node /nologo
+
+  # T23: packaging, provenance, release dry run. Waits on every test job
+  # (all five platforms actually decoding real prebuilds, not just the
+  # build jobs producing them) before assembling the publishable tarball,
+  # so a `package` green run is real end-to-end evidence, not just "five
+  # binaries compiled". Runs on ubuntu-24.04 like the other Linux-hosted
+  # jobs; checks out with submodules because scripts/gen-notices.js reads
+  # licence files out of vendor/LibRaw, vendor/zlib, vendor/libjpeg-turbo
+  # directly (see that script's header comment for the full input list).
+  package:
+    needs: [test-linux, test-macos, test-windows]
+    runs-on: ubuntu-24.04
+    # id-token: write is required for `npm publish --provenance` (OIDC-based
+    # Sigstore attestation to the npm registry); contents: read is the
+    # narrowest read this job needs beyond that (checkout).
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Read pinned Node version
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # Required by `npm publish --provenance`: without a registry-url
+          # here, setup-node does not write the .npmrc auth/registry config
+          # npm needs to attach a provenance attestation on publish.
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # Five separate downloads (one per build-linux/build-macos/build-windows
+      # artifact name) rather than a single glob download: the artifact
+      # names (prebuilds-linux-x64, prebuilds-linux-arm64,
+      # prebuilds-darwin-x64, prebuilds-darwin-arm64, prebuilds-win32-x64)
+      # already carry the exact prebuilds/<target> layout node-gyp-build
+      # expects, so each just needs unpacking into its matching directory.
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-linux-x64
+          path: prebuilds/linux-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-linux-arm64
+          path: prebuilds/linux-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-darwin-x64
+          path: prebuilds/darwin-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-darwin-arm64
+          path: prebuilds/darwin-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-win32-x64
+          path: prebuilds/win32-x64
+
+      - run: ls -R prebuilds
+
+      - name: Regenerate THIRD_PARTY_NOTICES.md and check it matches what's committed
+        run: node scripts/gen-notices.js --check
+
+      - name: npm pack --dry-run (report package/unpacked size without writing a tarball)
+        run: |
+          node -e "
+            const { execFileSync } = require('node:child_process');
+            const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
+            const [info] = JSON.parse(out);
+            const fmt = (n) => (n / 1024 / 1024).toFixed(2) + ' MiB';
+            console.log('npm pack --dry-run: ' + info.filename);
+            console.log('  entries: ' + info.entryCount);
+            console.log('  package size (compressed): ' + fmt(info.size));
+            console.log('  unpacked size: ' + fmt(info.unpackedSize));
+          "
+
+      - name: npm pack (writes the real tarball)
+        id: pack
+        run: |
+          OUT=$(npm pack --json)
+          echo "$OUT" > /tmp/npm-pack.json
+          FILENAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/npm-pack.json','utf8'))[0].filename)")
+          echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
+          ls -lh "$FILENAME"
+
+      # Proves the packed tarball -- not the repo checkout -- actually
+      # resolves and loads a prebuild: a fresh temp directory, a real `npm
+      # install` of the tarball (exercising package.json's `files`/`exports`
+      # the same way a real consumer would), then both module systems plus
+      # a decodeSync sanity check that the native addon actually loaded
+      # (decodeSync existing as a function proves node-gyp-build resolved
+      # prebuilds/linux-x64/node.napi.node from inside node_modules and the
+      # addon's N-API entry point ran without throwing).
+      - name: verify-package (install the tarball fresh and sanity-check it loads)
+        run: |
+          set -euo pipefail
+          TARBALL="$PWD/${{ steps.pack.outputs.filename }}"
+          VERIFY_DIR=$(mktemp -d)
+          cd "$VERIFY_DIR"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --omit=dev "$TARBALL"
+          echo '--- ESM import ---'
+          node --input-type=module -e "import { decode } from '@janhapke/libraw'; if (typeof decode !== 'function') throw new Error('decode is not a function'); console.log('ESM import OK: typeof decode ===', typeof decode);"
+          echo '--- CJS require ---'
+          node -e "const l = require('@janhapke/libraw'); if (typeof l.decode !== 'function') throw new Error('decode is not a function'); console.log('CJS require OK: typeof decode ===', typeof l.decode);"
+          echo '--- decodeSync sanity (proves the packed prebuild actually loaded) ---'
+          node -e "const l = require('@janhapke/libraw'); if (typeof l.decodeSync !== 'function') throw new Error('decodeSync missing'); console.log('decodeSync OK, buildInfo =', JSON.stringify(l.buildInfo));"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: '*.tgz'
+
+      # Publish guard: only on a `v*` tag push, and only if the tag's
+      # version actually matches package.json's version -- a mistagged
+      # release (e.g. tagging v0.2.0 before bumping package.json) must fail
+      # loudly here rather than publish the wrong version number.
+      - name: Verify tag version matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag v$TAG_VERSION does not match package.json version $PKG_VERSION -- refusing to publish"
+            exit 1
+          fi
+          echo "tag v$TAG_VERSION matches package.json version $PKG_VERSION"
+
+      - name: npm publish --provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
