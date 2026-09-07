@@ -75,6 +75,31 @@ jobs:
 
       - run: npm test
 
+      # T22: Electron smoke matrix (docs/how-to/test-under-electron.md).
+      # `electron` is deliberately not a package.json dependency (a
+      # ~100 MB per-version download) -- install it per version, run both
+      # smoke scripts under ELECTRON_RUN_AS_NODE=1 (no xvfb needed on Linux
+      # runners because the addon never opens a window in that mode), then
+      # repeat for the current Electron stable. electron@42 is photoview's
+      # pinned version (docs/explanation/electron-compatibility.md §9).
+      - name: Install electron@42
+        run: npm i --no-save electron@42
+
+      - name: Electron smoke test (electron@42)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-smoke.cjs
+
+      - name: Electron worker_threads smoke test (electron@42)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
+
+      - name: Install electron@latest
+        run: npm i --no-save electron@latest
+
+      - name: Electron smoke test (electron@latest)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-smoke.cjs
+
+      - name: Electron worker_threads smoke test (electron@latest)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
+
       - run: ./scripts/check-binary.sh prebuilds/linux-${{ matrix.arch }}/node.napi.node
 
       - name: Typecheck consumer-ts example against published types
@@ -171,6 +196,26 @@ jobs:
         run: node -e "const l=require('./lib/index.cjs');console.log(JSON.stringify(l.buildInfo))"
 
       - run: npm test
+
+      # T22: Electron smoke matrix -- see the test-linux job above for the
+      # full rationale; identical steps, macOS/bash shell.
+      - name: Install electron@42
+        run: npm i --no-save electron@42
+
+      - name: Electron smoke test (electron@42)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-smoke.cjs
+
+      - name: Electron worker_threads smoke test (electron@42)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
+
+      - name: Install electron@latest
+        run: npm i --no-save electron@latest
+
+      - name: Electron smoke test (electron@latest)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-smoke.cjs
+
+      - name: Electron worker_threads smoke test (electron@latest)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
 
       - run: otool -L prebuilds/${{ matrix.target }}/node.napi.node
 
@@ -272,6 +317,44 @@ jobs:
         run: node -e "const l=require('./lib/index.cjs');console.log(JSON.stringify(l.buildInfo))"
 
       - run: npm test
+
+      # T22: Electron smoke matrix -- see the test-linux job above for the
+      # full rationale. Windows steps use pwsh explicitly and set
+      # $env:ELECTRON_RUN_AS_NODE (the bash `FOO=1 cmd` prefix syntax used
+      # on Linux/macOS is not portable to PowerShell). GitHub Actions checks
+      # $LASTEXITCODE after a pwsh step's final command, so a failing
+      # smoke script still fails the step.
+      - name: Install electron@42
+        shell: pwsh
+        run: npm i --no-save electron@42
+
+      - name: Electron smoke test (electron@42)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          npx electron test/electron-smoke.cjs
+
+      - name: Electron worker_threads smoke test (electron@42)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          npx electron test/electron-workers-smoke.cjs
+
+      - name: Install electron@latest
+        shell: pwsh
+        run: npm i --no-save electron@latest
+
+      - name: Electron smoke test (electron@latest)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          npx electron test/electron-smoke.cjs
+
+      - name: Electron worker_threads smoke test (electron@latest)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          npx electron test/electron-workers-smoke.cjs
 
       - name: dumpbin /DEPENDENTS
         run: dumpbin /DEPENDENTS prebuilds/win32-x64/node.napi.node /nologo
