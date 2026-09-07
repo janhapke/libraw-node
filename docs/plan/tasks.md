@@ -612,6 +612,21 @@ Acceptance:
 > first N-API call. Reproduce with a cold-start workers script in the Windows job, fix in C++ (e.g. serialise
 > first-load in `DllMain`-free way: resolve the delay-load once in `napi_register_module_v1`), and remove the
 > warm-up from `test/electron-workers-smoke.cjs` once fixed.
+>
+> **Resolved in T24 (2026-09-07):** `test/electron-workers-cold-smoke.cjs` (no warm-up at all) reproduced a
+> related but more precise failure on `windows-2022`: every worker decoded correctly and the script printed
+> its own `PASS` line, but the OS process then exited with code 1 about 0.3s later with zero further output --
+> and this reproduced identically under **plain Node**, not only Electron (3 and 6 workers, both electron@42
+> and electron@latest, and plain `node`). The plain-Node reproduction rules out the Electron-vs-`node.exe`
+> redirect as the cause, but is consistent with the actual one: this addon is always built as a delay-loaded
+> import of `node.exe` (so one binary serves both Electron and Node), so the same lazy, per-thunk, first-use
+> IAT resolution -- which Microsoft's own delay-load documentation says is not thread-safe -- runs on every
+> Windows load regardless of host. Fix: `src/win_delay_load_hook.cc` adds a `DllMain(DLL_PROCESS_ATTACH)` that
+> calls `__HrLoadAllImportsForDll(HOST_BINARY)` once, synchronously, before any application thread can execute
+> code from the DLL (`DLL_PROCESS_ATTACH` runs exactly once per process, under the loader lock), removing the
+> racy lazy-resolution path entirely. Confirmed green on `windows-2022` (plain Node and both Electron
+> versions, 3 and 6 workers) after the fix; the warm-up is removed from `test/electron-workers-smoke.cjs`, and
+> the cold script runs permanently (no `continue-on-error`) on all five CI test jobs.
 
 
 Read: `docs/how-to/make-the-addon-electron-safe.md` (table rows 1–12), knowledge base

@@ -3,3 +3,10 @@ build/
 prebuilds/
 dist/
 *.tgz
+# T24: Electron Forge asar-packaging test app (test/forge-app/) -- its own
+# node_modules (installed by scripts/forge-asar-check.sh from the packed
+# tarball, not checked in), Forge's `package`/`make` output directory, and
+# the synthetic DNG fixture the script copies in before packaging.
+out/
+test/forge-app/pm5544-768x576.dng
+test/forge-app/package-lock.json

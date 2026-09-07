@@ -68,18 +68,40 @@ What this catches that plain `node` does not:
 - Symbol clashes with Electron's bundled zlib/libjpeg. The synthetic DNG is uncompressed, so add a
   deflate-compressed DNG and a lossy DNG fixture to exercise the zlib and libjpeg code paths.
 
-What it does not catch: asar packaging and code signing. For those, keep a minimal Electron Forge app
-(`test/forge-app/`) that depends on the packed tarball, `electron-forge package`, then run
-`ELECTRON_RUN_AS_NODE=1 <packaged binary> -e "require('<app.asar path>/...')"` as the knowledge base did
-for sharp, and on macOS `codesign --verify --deep --strict`. (This is T24, not T22.)
+What it does not catch: asar packaging. For that, `test/forge-app/` (T24) is a minimal Electron Forge app
+that depends on the packed tarball via `file:../../janhapke-libraw-0.0.0.tgz`; `scripts/forge-asar-check.sh`
+runs `npm pack`, installs the app, `electron-forge package --platform linux --arch x64` (no display needed),
+then `ELECTRON_RUN_AS_NODE=1 out/<app>/<binary> test/forge-app/asar-check.cjs`, which `require`s
+`@janhapke/libraw` from inside the packaged `resources/app.asar`, decodes the synthetic DNG, and prints
+`PASS loadedFrom=<path>` where `<path>` must contain `app.asar.unpacked` -- proof the native `.node` file
+was actually pulled out of the archive (Forge's `packagerConfig.asar.unpack: '**/*.node'`) and genuinely
+loaded from there, not merely present. Not covered even by T24: code signing (macOS `codesign --verify
+--deep --strict` needs a signed, packaged app; nothing here signs one).
 
-Worker-thread variant: `test/electron-workers-smoke.cjs` spawns 3 `worker_threads`, each requiring the
+Worker-thread variants: `test/electron-workers-smoke.cjs` spawns 3 `worker_threads`, each requiring the
 addon and running one `decode()`, then posts its output checksum (SHA-256) back to the main thread, which
 asserts all three match -- proving the addon's `Napi::Addon` context-aware state does not leak or collide
-across worker instances under Electron. Run it under `ELECTRON_RUN_AS_NODE=1` too; it prints
+across worker instances under Electron. It also does a single-threaded warm-up `require()` of the addon on
+the main thread before spawning any worker. Run it under `ELECTRON_RUN_AS_NODE=1` too; it prints
 `PASS workers=3 electron=<version>`.
 
-CI (`.github/workflows/build.yml`) runs both scripts in every `test-*` job (Linux x64/arm64, macOS
+`test/electron-workers-cold-smoke.cjs` (T24 Part A) is the same idea with **no** warm-up: 3 (or more, via
+`argv[2]`) `worker_threads` each do their *first* `require()` of the addon concurrently, with no
+single-threaded require first. This exists because that difference mattered: on `windows-2022` under
+Electron, several worker_threads doing their first `require()` at the same moment used to die silently (see
+`docs/plan/tasks.md`'s T24 section, "Open item from T22", for the investigation and the
+`src/win_delay_load_hook.cc` fix -- an MSVC delay-load-runtime race on the first resolution of a
+still-unpatched import thunk, not anything Electron-specific in the addon itself). It prints
+`PASS workers=<N> cold=true electron=<version>`.
+
+`scripts/electron-safety.sh` (T24 Part B) runs the platform binary check, a forbidden-include grep,
+`buildInfo` sanity checks, and all three scripts above (under the installed `electron` package if present)
+as one entry point; `npm run electron:safety` runs it.
+
+CI (`.github/workflows/build.yml`) runs the smoke scripts in every `test-*` job (Linux x64/arm64, macOS
 x64/arm64, Windows x64), twice: once against `electron@42` (photoview's pinned version) and once against
 `electron@latest` (the current Electron stable at CI run time) -- `electron` is installed with
-`npm i --no-save` in the job itself, never added to `package.json`.
+`npm i --no-save` in the job itself, never added to `package.json`. The cold script runs permanently in
+every `test-*` job too (Windows additionally runs it with 6 workers, and under plain Node, as a permanent
+regression guard for the race described above). The Linux x64 job alone also runs `electron-safety.sh` and
+`forge-asar-check.sh`.

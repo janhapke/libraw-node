@@ -102,6 +102,15 @@ jobs:
       - name: Electron worker_threads smoke test (electron@42)
         run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
 
+      # T24 Part A: cold-start worker_threads smoke test (no main-thread
+      # warm-up require at all -- see test/electron-workers-cold-smoke.cjs's
+      # header comment and docs/plan/tasks.md's T24 "Open item from T22").
+      # Runs permanently (no continue-on-error) on all five test jobs; the
+      # Windows job additionally reproduced the original failure and proved
+      # the fix under both plain Node and Electron, 3 and 6 workers.
+      - name: Cold-start worker_threads smoke test (electron@42)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-cold-smoke.cjs 3
+
       - name: Install electron@latest
         run: npm i --no-save electron@latest
 
@@ -111,6 +120,9 @@ jobs:
       - name: Electron worker_threads smoke test (electron@latest)
         run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
 
+      - name: Cold-start worker_threads smoke test (electron@latest)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-cold-smoke.cjs 3
+
       - run: ./scripts/check-binary.sh prebuilds/linux-${{ matrix.arch }}/node.napi.node
 
       - name: Typecheck consumer-ts example against published types
@@ -118,6 +130,21 @@ jobs:
           cd examples/consumer-ts
           npm ci
           npx tsc --noEmit
+
+      # T24 Part B/C: electron-safety.sh and the Forge asar-packaging check
+      # only need to run once (not once per Linux arch) -- x64 is the
+      # natural choice since it's the first/fastest Linux runner and
+      # electron-forge's own tooling (used by forge-asar-check.sh) does not
+      # need to be exercised under emulation. electron-safety.sh reruns the
+      # smoke scripts under the electron@latest already installed above
+      # (node_modules/electron exists at this point in the job).
+      - name: Electron safety check (scripts/electron-safety.sh)
+        if: matrix.arch == 'x64'
+        run: ./scripts/electron-safety.sh
+
+      - name: Electron Forge asar packaging check (scripts/forge-asar-check.sh)
+        if: matrix.arch == 'x64'
+        run: ./scripts/forge-asar-check.sh
 
   # T20: macOS x64/arm64. No Docker path here (Xcode/macOS SDK use requires
   # Apple hardware), so these run directly on the two GitHub-hosted macOS
@@ -219,6 +246,11 @@ jobs:
       - name: Electron worker_threads smoke test (electron@42)
         run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
 
+      # T24 Part A: cold-start worker_threads smoke test -- see the
+      # test-linux job's identical step for the full rationale.
+      - name: Cold-start worker_threads smoke test (electron@42)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-cold-smoke.cjs 3
+
       - name: Install electron@latest
         run: npm i --no-save electron@latest
 
@@ -227,6 +259,9 @@ jobs:
 
       - name: Electron worker_threads smoke test (electron@latest)
         run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs
+
+      - name: Cold-start worker_threads smoke test (electron@latest)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-cold-smoke.cjs 3
 
       - run: otool -L prebuilds/${{ matrix.target }}/node.napi.node
 
@@ -329,6 +364,33 @@ jobs:
 
       - run: npm test
 
+      # T24 Part A: the "Open item from T22" cold-start reproduction, kept
+      # permanently as a regression guard (docs/plan/tasks.md's T24
+      # section has the full investigation). Runs under plain Node *before*
+      # Electron enters the picture at all -- the round-1 evidence that
+      # mattered: this reproduced identically under plain Node too (not
+      # only Electron), which ruled out the Electron-vs-node.exe redirect
+      # as the cause but was fully consistent with the actual one: this
+      # addon is always built as a delay-loaded import of node.exe
+      # (src/win_delay_load_hook.cc), Electron host or not, so the same
+      # delay-load-runtime race was reachable from plain Node all along.
+      # NODE_OPTIONS=--trace-uncaught is kept from the investigation (cheap
+      # insurance -- surfaces a stack trace for anything that would
+      # otherwise die silently). No continue-on-error: the fix
+      # (win_delay_load_hook.cc's DllMain) makes all of these reliably
+      # green.
+      - name: Cold-start worker_threads smoke test (plain node, 3 workers)
+        shell: pwsh
+        run: |
+          $env:NODE_OPTIONS = "--trace-uncaught"
+          node test/electron-workers-cold-smoke.cjs 3
+
+      - name: Cold-start worker_threads smoke test (plain node, 6 workers)
+        shell: pwsh
+        run: |
+          $env:NODE_OPTIONS = "--trace-uncaught"
+          node test/electron-workers-cold-smoke.cjs 6
+
       # T22: Electron smoke matrix -- see the test-linux job above for the
       # full rationale. Windows steps use pwsh explicitly and set
       # $env:ELECTRON_RUN_AS_NODE (the bash `FOO=1 cmd` prefix syntax used
@@ -351,6 +413,23 @@ jobs:
           $env:ELECTRON_RUN_AS_NODE = "1"
           npx electron test/electron-workers-smoke.cjs
 
+      # T24 Part A: same cold-start regression guard as above, this time
+      # under Electron 42 (photoview's pinned version) -- the exact
+      # scenario the "Open item from T22" was found in.
+      - name: Cold-start worker_threads smoke test (electron@42, 3 workers)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          $env:NODE_OPTIONS = "--trace-uncaught"
+          npx electron test/electron-workers-cold-smoke.cjs 3
+
+      - name: Cold-start worker_threads smoke test (electron@42, 6 workers)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          $env:NODE_OPTIONS = "--trace-uncaught"
+          npx electron test/electron-workers-cold-smoke.cjs 6
+
       - name: Install electron@latest
         shell: pwsh
         run: npm i --no-save electron@latest
@@ -366,6 +445,22 @@ jobs:
         run: |
           $env:ELECTRON_RUN_AS_NODE = "1"
           npx electron test/electron-workers-smoke.cjs
+
+      # T24 Part A: same cold-start regression guard under the current
+      # Electron stable too.
+      - name: Cold-start worker_threads smoke test (electron@latest, 3 workers)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          $env:NODE_OPTIONS = "--trace-uncaught"
+          npx electron test/electron-workers-cold-smoke.cjs 3
+
+      - name: Cold-start worker_threads smoke test (electron@latest, 6 workers)
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          $env:NODE_OPTIONS = "--trace-uncaught"
+          npx electron test/electron-workers-cold-smoke.cjs 6
 
       - name: dumpbin /DEPENDENTS
         run: dumpbin /DEPENDENTS prebuilds/win32-x64/node.napi.node /nologo

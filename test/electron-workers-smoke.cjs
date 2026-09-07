@@ -10,18 +10,17 @@
 // (Napi::Addon, no process-global mutable state) under Electron, not just
 // under plain Node.
 //
-// The main thread also requires the addon once itself (see WARM_UP_MAIN
-// below) before spawning any worker. This is a real fix, not just
-// diagnostics: on Windows, the very first N-API call from *any* thread
-// resolves this addon's delay-load import of node.exe's exports
-// (src/win_delay_load_hook.cc, docs/explanation/electron-compatibility.md
-// §3) by patching a process-wide IAT slot -- doing that once, single
-// -threaded, before 3 worker_threads all attempt their own first N-API call
-// within milliseconds of each other, avoids depending on the delay-load
-// runtime's (and this addon's own static initializers') behaviour under
-// concurrent first use, which is not something either is documented to
-// guarantee. Each worker still independently requires the module and runs
-// its own decode() -- the thing this test actually exists to prove.
+// T22 had the main thread also require() the addon once itself before
+// spawning any worker, to work around a real Windows failure: N
+// worker_threads all making their first N-API call within milliseconds of
+// each other could die silently (docs/plan/tasks.md's T24 "Open item from
+// T22"). T24 found and fixed the actual cause in
+// src/win_delay_load_hook.cc (a DllMain that resolves every delay-loaded
+// node.exe import once, up front, removing the race in MSVC's delay-load
+// runtime rather than dodging it with a warm-up here) and removed the
+// warm-up -- see test/electron-workers-cold-smoke.cjs, which is the
+// permanent regression guard for exactly this scenario (same idea, no
+// warm-up at all, run on all five CI test jobs).
 //
 // Runs equally under `ELECTRON_RUN_AS_NODE=1 npx electron test/electron-workers-smoke.cjs`
 // and plain `node test/electron-workers-smoke.cjs`.
@@ -103,11 +102,6 @@ function runWorker(index) {
 
 async function mainThread() {
   const electronVersion = process.versions.electron || 'none';
-
-  // See the header comment: a single-threaded warm-up require before any
-  // worker starts, not part of the correctness assertion itself.
-  console.error('[main] warm-up require of addon before spawning workers');
-  require(LIB_PATH);
 
   console.error(`[main] spawning ${WORKER_COUNT} workers`);
   const results = await Promise.all(Array.from({ length: WORKER_COUNT }, (_unused, i) => runWorker(i)));

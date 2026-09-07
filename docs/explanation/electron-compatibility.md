@@ -56,6 +56,26 @@ that adds the hook) or add `win_delay_load_hook.cc` from `node-gyp/src` to the s
 procedure could not be found" only inside Electron, never in Node, which is why the Electron smoke test is
 mandatory.
 
+### 3a. The delay-load runtime is not thread-safe for concurrent first use (T24)
+
+T22's Electron worker-thread smoke test found that on `windows-2022`, several `worker_threads` doing their
+*first* `require()` of the addon at the same moment (no single-threaded warm-up first) could die silently
+under Electron -- no crash dump, no `PASS`/`FAIL` line, just a dead job step. The suspect, and the confirmed
+cause: MSVC's delay-load runtime (`delayimp.lib`) is documented by Microsoft itself ("Delay-load DLL
+restrictions") as not safe against multiple threads racing to resolve the same still-unpatched IAT thunk for
+the first time -- exactly what happens when N `worker_threads` each make their first N-API call (through
+this addon's delay-loaded import of `node.exe`/`electron.exe`) within milliseconds of each other.
+
+The fix (`src/win_delay_load_hook.cc`) adds a `DllMain(DLL_PROCESS_ATTACH)` that calls
+`__HrLoadAllImportsForDll(HOST_BINARY)` once, synchronously, before any application thread can execute code
+from the DLL: `DLL_PROCESS_ATTACH` runs exactly once per process (the Windows loader refcounts subsequent
+`LoadLibrary` calls for the same already-mapped file rather than re-running it) and while the process-wide
+loader lock is held, so no thread can be mid-call into this addon while it executes. This removes the lazy,
+per-thunk, first-use resolution path -- where the race lived -- entirely, rather than trying to make that
+path thread-safe. `test/electron-workers-cold-smoke.cjs` (no warm-up, unlike `test/electron-workers-smoke.cjs`)
+is the permanent regression guard, on all five CI test jobs; the Windows job additionally runs it under plain
+Node and with 6 workers.
+
 ## 4. Context-aware and worker_threads-safe
 
 photoview loads the addon in up to six `worker_threads` inside a `utilityProcess`. Requirements:
@@ -80,6 +100,14 @@ photoview loads the addon in up to six `worker_threads` inside a `utilityProcess
   `**/*.node` only. Any shared-library sidecar (`.so`, `.dylib`, `.dll`) next to the addon stays trapped
   unless you extend `packagerConfig.asar.unpack` (knowledge base `electron-native-modules.md`, found the
   hard way with `libvips-cpp.so`).
+- `node-gyp-build` (the loader `lib/binding.cjs` uses) has no asar-specific handling at all (T24, confirmed
+  empirically with `test/forge-app/`): it always resolves and `require()`s a path *inside* `app.asar`, never
+  the unpacked sibling. Electron's own `require()`/`process.dlopen` patch transparently redirects that path
+  to `app.asar.unpacked` when it actually loads the binary, so the addon works either way -- but the
+  redirect is invisible to Node (the reported module path stays the `app.asar` one). `lib/binding.cjs` does
+  the same `app.asar` -> `app.asar.unpacked` rewrite itself before calling `require()`, both so the reported
+  path is the real one (what `test/forge-app/asar-check.cjs` asserts) and as defense-in-depth for any process
+  type where Electron's implicit redirect might not apply.
 - Therefore build the addon **fully static**: LibRaw, zlib, libjpeg-turbo, (LCMS2, libomp) all linked into
   the single `.node`. No RPATH tricks, no `patchelf`, no `$ORIGIN`, no SONAME collisions.
 - Hide symbols: `-fvisibility=hidden` and export only `napi_register_module_v1` (a linker version script on
