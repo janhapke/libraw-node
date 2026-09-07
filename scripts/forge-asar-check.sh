@@ -7,15 +7,17 @@
 # straight out of the repo/node_modules, never through an asar archive).
 #
 # Steps:
-#   1. `npm pack` at the repo root -- produces janhapke-libraw-0.0.0.tgz,
-#      the exact tarball a real consumer would install.
+#   1. `npm pack` at the repo root -- produces janhapke-libraw-<version>.tgz
+#      (version read from package.json), the exact tarball a real consumer
+#      would install. Step 1b rewrites test/forge-app/package.json's `file:`
+#      dependency to match, so a release version bump does not go stale.
 #   2. Copy the synthetic DNG fixture into test/forge-app/ so Forge packages
 #      it alongside main.js (test/forge-app/main.js and asar-check.cjs both
 #      read it from the app root).
 #   3. `npm install` inside test/forge-app/ -- installs @electron-forge/cli,
-#      electron, and @janhapke/libraw via the `file:../../janhapke-libraw-
-#      0.0.0.tgz` dependency in test/forge-app/package.json (so this
-#      exercises the real packed tarball, not a symlinked/live source tree).
+#      electron, and @janhapke/libraw via the versioned `file:` dependency
+#      step 1b just wrote (so this exercises the real packed tarball, not a
+#      symlinked/live source tree).
 #   4. `electron-forge package --platform linux --arch x64` -- packages the
 #      app into test/forge-app/out/. This does not need a display (unlike
 #      `make`, `start`, or `launch`).
@@ -34,13 +36,27 @@ REPO_ROOT="$(pwd)"
 FORGE_APP_DIR="${REPO_ROOT}/test/forge-app"
 
 echo "== 1. npm pack (repo root) =="
+PKG_VERSION="$(node -p "require('./package.json').version")"
+TARBALL="${REPO_ROOT}/janhapke-libraw-${PKG_VERSION}.tgz"
 npm pack
-TARBALL="${REPO_ROOT}/janhapke-libraw-0.0.0.tgz"
 if [ ! -f "$TARBALL" ]; then
   echo "forge-asar-check: expected tarball not found: ${TARBALL}" >&2
   exit 1
 fi
 echo "tarball: ${TARBALL}"
+echo
+
+echo "== 1b. Point test/forge-app/package.json at this version's tarball =="
+# The dependency name is versioned (npm pack's own naming), so a release
+# version bump must be reflected here too, or step 3's npm install would
+# silently keep resolving the previous release's (or 0.0.0's) tarball name.
+node -e "
+  const fs = require('fs');
+  const p = '${FORGE_APP_DIR}/package.json';
+  const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+  pkg.dependencies['@janhapke/libraw'] = 'file:../../janhapke-libraw-${PKG_VERSION}.tgz';
+  fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+"
 echo
 
 echo "== 2. Copy synthetic DNG fixture into test/forge-app/ =="
