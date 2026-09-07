@@ -40,8 +40,8 @@ import { EventEmitter } from 'node:events';
 
 // --- toSharp (T16, lib/tosharp.cjs) ------------------------------------------
 //
-// `sharp` is an optional peer dependency (see package.json's
-// `peerDependenciesMeta.sharp`) -- this package never imports sharp's own
+// This package declares no dependency on `sharp` (not even an optional peer
+// one; the caller passes its own module in) and never imports sharp's own
 // types, so `toSharp` is typed structurally against whatever factory
 // function the caller's own `import sharp from 'sharp'` resolves to: `S`'s
 // return type flows through unchanged (`ReturnType<S>`, sharp's own `Sharp`

@@ -28,8 +28,8 @@ it wraps the raw pixel buffer the same way (a `Uint16Array` view, still no copy,
 JPEG-format thumbnail it hands the JPEG bytes straight to `sharpModule(data)`, letting sharp decode them
 itself.
 
-This package never `require`s `sharp` — it is an optional peer dependency
-(`peerDependenciesMeta.sharp.optional: true`), and `toSharp`'s type is a structural
+This package never `require`s `sharp` and declares no dependency on it, not even an optional peer
+one (so aliased forks such as `@janhapke/sharp-electron` need no npm override), and `toSharp`'s type is a structural
 `<S extends (input, options?) => any>(sharp: S) => ReturnType<S>`, not sharp's own types. Bring whatever
 `sharp`-compatible module your app already uses (a vanilla `sharp` install, or an Electron-packaged
 alternative) and pass it in — the binding never assumes which one.
