@@ -85,6 +85,49 @@ decltype(__pfnDliNotifyHook2) __pfnDliNotifyHook2 = load_exe_hook;
 // failure this simply leaves that one import to the normal lazy path
 // -- exactly today's (racy but otherwise working) behaviour -- rather
 // than aborting the whole DLL load over it.
+// T24b (docs/plan/tasks.md, follow-up to the block above): the DllMain fix
+// above did *not* resolve the "PASS, then exit code 1 (or, under the more
+// verbose repro added for T24b, STATUS_ACCESS_VIOLATION / 0xC0000005) about
+// 0.3s later" failure -- confirmed on `main` (run 34136306293) and
+// reproduced far more precisely across three further CI rounds (runs
+// 34137891164, 34138930368, 34139660303; the full variant table lives in
+// test/helpers/run-variants.cjs and docs/plan/tasks.md's T24b section).
+// Summary of what those rounds narrowed the cause down to: a cold
+// worker_thread that is ever the *first* thread in the process to reach
+// LibRaw's OpenMP-parallel demosaic code (dcraw_process, compiled with
+// MSVC's classic /openmp) crashes -- reproduced with a single cold worker
+// and no concurrency at all, and reproduced even by a deliberately
+// inserted no-op `#pragma omp parallel` touch run from the addon's own
+// per-Env constructor (on the calling worker thread, or on a dedicated
+// std::thread -- identical results either way; *which* thread executes
+// vcomp's first `_vcomp_fork` did not matter). Only two things were ever
+// safe across every round: OMP_NUM_THREADS=1 (forces vcomp's lazy team
+// creation down a no-team-needed fast path -- it never creates, and so
+// never later has to tear down, a real worker-thread pool at all) and a
+// main-thread warm-up require() before any worker spawns (T22's original
+// workaround, kept as test/electron-workers-smoke.cjs but never a fix this
+// addon can rely on, since a real consumer's workers may never warm up).
+//
+// Fix: set OMP_NUM_THREADS=1 in the process environment here, in
+// DLL_PROCESS_ATTACH -- guaranteed to run exactly once, before any
+// application thread (main or worker) can execute a single line of this
+// addon's or LibRaw's code, and *without* calling into vcomp140.dll at all
+// (unlike calling omp_set_num_threads() from application code would, which
+// round 2/3's evidence above says is itself unsafe to do from a cold
+// worker thread) -- vcomp only ever reads this variable lazily, on its own
+// first `_vcomp_fork`, wherever and whenever that naturally happens. Only
+// sets it if the user/environment hasn't already set one, so an explicit
+// OMP_NUM_THREADS from outside this addon is never overridden. This trades
+// away the multi-threaded demosaic speedup buildInfo.openmp=true implies
+// on Windows for eliminating a real crash; see docs/plan/tasks.md's T28
+// section for the follow-up to fix the actual root cause and restore it.
+//
+// Round 5 update: setting the variable here alone did not work (run
+// 34140957966's variant table was byte-identical to round 1's completely
+// unfixed baseline) -- see CMakeLists.txt's WIN32 branch, which now also
+// delay-loads VCOMP140.DLL itself so this DllMain (node.napi.node's own,
+// which always runs first) gets a chance to set the variable *before*
+// VCOMP140.DLL's own DllMain ever runs and (theory) reads it.
 BOOL WINAPI DllMain(HINSTANCE /*hinstDLL*/, DWORD fdwReason, LPVOID /*lpvReserved*/) {
   if (fdwReason == DLL_PROCESS_ATTACH) {
     __try {
@@ -92,6 +135,16 @@ BOOL WINAPI DllMain(HINSTANCE /*hinstDLL*/, DWORD fdwReason, LPVOID /*lpvReserve
     } __except (EXCEPTION_EXECUTE_HANDLER) {
       // Fall through: leave unresolved thunks (if any) to the normal
       // lazy delay-load path. Never fail the DLL load over this.
+    }
+
+    // len == 0 covers both "not set at all" (GetLastError() would be
+    // ERROR_ENVIRONMENT_VARIABLE_NOT_FOUND, 203, but that constant needs a
+    // header this file doesn't otherwise pull in) and "set to an empty
+    // string" -- both cases where forcing "1" here is the right call.
+    char existing[8];
+    DWORD len = GetEnvironmentVariableA("OMP_NUM_THREADS", existing, sizeof(existing));
+    if (len == 0) {
+      SetEnvironmentVariableA("OMP_NUM_THREADS", "1");
     }
   }
   return TRUE;

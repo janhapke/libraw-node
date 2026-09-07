@@ -372,21 +372,31 @@ jobs:
 
       - run: npm test
 
+      # T24b: diagnostic variant table (docs/plan/tasks.md's T24b section --
+      # the STATUS_ACCESS_VIOLATION crash investigation and fix). Runs
+      # test/helpers/run-variants.cjs, which spawns ten lettered variants
+      # (a)-(j) of test/helpers/cold-variant.cjs as fresh `node` child
+      # processes and prints a `VARIANT <letter> exit=<code>` table -- kept
+      # permanently as a cheap, high-signal regression guard (this driver
+      # always exits 0 itself; see its header comment) now that all ten
+      # variants are green.
+      - name: "T24b diagnostics: cold-start worker_threads variant table"
+        shell: pwsh
+        run: node test/helpers/run-variants.cjs
+
       # T24 Part A: the "Open item from T22" cold-start reproduction, kept
-      # permanently as a regression guard (docs/plan/tasks.md's T24
-      # section has the full investigation). Runs under plain Node *before*
-      # Electron enters the picture at all -- the round-1 evidence that
-      # mattered: this reproduced identically under plain Node too (not
-      # only Electron), which ruled out the Electron-vs-node.exe redirect
-      # as the cause but was fully consistent with the actual one: this
-      # addon is always built as a delay-loaded import of node.exe
-      # (src/win_delay_load_hook.cc), Electron host or not, so the same
-      # delay-load-runtime race was reachable from plain Node all along.
-      # NODE_OPTIONS=--trace-uncaught is kept from the investigation (cheap
-      # insurance -- surfaces a stack trace for anything that would
-      # otherwise die silently). No continue-on-error: the fix
-      # (win_delay_load_hook.cc's DllMain) makes all of these reliably
-      # green.
+      # permanently as a regression guard (docs/plan/tasks.md's T24 and T24b
+      # sections have the full investigation). Runs under plain Node
+      # *before* Electron enters the picture at all -- this reproduced
+      # identically under plain Node too (not only Electron), which ruled
+      # out the Electron-vs-node.exe redirect as the cause. The real root
+      # cause (T24b) was a Windows /openmp (vcomp140.dll) runtime crash on
+      # cold worker_threads, fixed in src/win_delay_load_hook.cc +
+      # CMakeLists.txt (delay-loading VCOMP140.DLL so this addon's own
+      # DllMain can force single-threaded OpenMP before vcomp ever reads
+      # OMP_NUM_THREADS). NODE_OPTIONS=--trace-uncaught is kept from the
+      # investigation (cheap insurance -- surfaces a stack trace for
+      # anything that would otherwise die silently).
       - name: Cold-start worker_threads smoke test (plain node, 3 workers)
         shell: pwsh
         run: |

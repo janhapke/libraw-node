@@ -81,18 +81,21 @@ loaded from there, not merely present. Not covered even by T24: code signing (ma
 Worker-thread variants: `test/electron-workers-smoke.cjs` spawns 3 `worker_threads`, each requiring the
 addon and running one `decode()`, then posts its output checksum (SHA-256) back to the main thread, which
 asserts all three match -- proving the addon's `Napi::Addon` context-aware state does not leak or collide
-across worker instances under Electron. It also does a single-threaded warm-up `require()` of the addon on
-the main thread before spawning any worker. Run it under `ELECTRON_RUN_AS_NODE=1` too; it prints
+across worker instances under Electron. Run it under `ELECTRON_RUN_AS_NODE=1` too; it prints
 `PASS workers=3 electron=<version>`.
 
-`test/electron-workers-cold-smoke.cjs` (T24 Part A) is the same idea with **no** warm-up: 3 (or more, via
-`argv[2]`) `worker_threads` each do their *first* `require()` of the addon concurrently, with no
-single-threaded require first. This exists because that difference mattered: on `windows-2022` under
-Electron, several worker_threads doing their first `require()` at the same moment used to die silently (see
-`docs/plan/tasks.md`'s T24 section, "Open item from T22", for the investigation and the
-`src/win_delay_load_hook.cc` fix -- an MSVC delay-load-runtime race on the first resolution of a
-still-unpatched import thunk, not anything Electron-specific in the addon itself). It prints
-`PASS workers=<N> cold=true electron=<version>`.
+`test/electron-workers-cold-smoke.cjs` (T24 Part A) is the same idea but explicitly documents that no
+main-thread warm-up `require()` happens before the workers spawn (both scripts are "cold" the same way since
+T24 removed the old warm-up workaround -- see below): 3 (or more, via `argv[2]`) `worker_threads` each do
+their *first* `require()` of the addon concurrently. This script exists because, on `windows-2022`, cold
+worker_threads used to crash (`STATUS_ACCESS_VIOLATION`) or silently exit the process with code 1 shortly
+after a successful decode -- see `docs/plan/tasks.md`'s T24 and T24b sections for the full investigation and
+fix (a Windows `/openmp` runtime crash on cold worker threads, not anything Electron-specific in the addon
+itself, and not the MSVC delay-load-runtime race T24's first fix targeted). It prints
+`PASS workers=<N> cold=true electron=<version>`. `test/helpers/run-variants.cjs` (T24b) is a further
+Windows-only diagnostic step, kept permanently in CI, that runs ten lettered variants of this same scenario
+(worker count, `decode`/`require`-only/`version`-only, various env overrides, a warm-up, `worker.terminate()`
+ordering, and a no-`worker_threads` control) and prints a compact `VARIANT <letter> exit=<code>` table.
 
 `scripts/electron-safety.sh` (T24 Part B) runs the platform binary check, a forbidden-include grep,
 `buildInfo` sanity checks, and all three scripts above (under the installed `electron` package if present)

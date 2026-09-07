@@ -593,4 +593,28 @@ elseif(WIN32)
   # docs/how-to/make-the-addon-electron-safe.md row 3.
   target_link_libraries(addon PRIVATE "${LIBRAW_NODE_NODE_LIB}" delayimp.lib)
   target_link_options(addon PRIVATE "/DELAYLOAD:node.exe")
+
+  # T24b round 5: also delay-load VCOMP140.DLL (the /openmp runtime -- see
+  # win_delay_load_hook.cc's DllMain for the full round-4/5 writeup). Round
+  # 4 set OMP_NUM_THREADS=1 via SetEnvironmentVariableA in that same DllMain
+  # but it had zero effect (run 34140957966's variant table was
+  # byte-identical to round 1's un-fixed baseline) -- the leading theory is
+  # that VCOMP140.DLL, as an ordinary (non-delay-loaded) dependency, gets
+  # loaded and runs its own DllMain -- reading OMP_NUM_THREADS once, then
+  # -- as part of node.napi.node's own load, which happens *before*
+  # node.napi.node's own DllMain (this file's) ever gets a chance to run and
+  # set that variable. Delay-loading VCOMP140.DLL defers its LoadLibrary
+  # (and therefore its DllMain, and therefore whenever it reads
+  # OMP_NUM_THREADS, if it does so at load time) until LibRaw's first actual
+  # OpenMP call -- by which point this file's DllMain (running at
+  # DLL_PROCESS_ATTACH for node.napi.node itself, always the *first* load
+  # event for this addon) has already set the environment variable. No
+  # custom notify hook is needed here (unlike node.exe/HOST_BINARY above):
+  # VCOMP140.DLL is a real on-disk DLL, found via the ordinary DLL search
+  # path exactly as it already is today as a normal dependency, so the
+  # default delay-load resolution (plain LoadLibrary + GetProcAddress) is
+  # correct as-is.
+  if(LIBRAW_NODE_OPENMP)
+    target_link_options(addon PRIVATE "/DELAYLOAD:VCOMP140.DLL")
+  endif()
 endif()

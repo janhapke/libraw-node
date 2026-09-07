@@ -639,14 +639,53 @@ Acceptance:
 > **Confirmed NOT fixed (2026-09-07 15:06 UTC, run 34136306293 on `main`):** `test-windows` step "Cold-start
 > worker_threads smoke test (plain node, 3 workers)" prints `PASS workers=3 cold=true electron=none` and the
 > process still exits with code 1 about 0.34 s later, with no further output. The `DllMain` change therefore
-> does not address the cause. Open follow-up (T24b): reproduce on `windows-2022` with `--trace-exit`,
-> `--trace-uncaught`, `process.on('exit')`/`worker.on('error'|'exit')` logging and per-worker exit codes, and
-> check whether the failure needs `worker_threads` at all (run 3 sequential `require`+decode in one thread) and
-> whether it is teardown-related (add `await new Promise(r => setTimeout(r, 1000))` before natural exit, or
-> `worker.terminate()` ordering). Candidates: N-API env cleanup hooks running per worker exit (Processor/
-> AsyncWorker instance data, `Napi::Addon` per-env instance destructors), OpenMP `vcomp140` thread-pool
-> teardown on a worker thread, or a DLL_THREAD_DETACH path. All other jobs (linux x64/arm64, darwin x64/arm64,
-> build-windows incl. `dumpbin`) are green on this run; only the Windows test job blocks the `package` job.
+> does not address the cause. Investigated and fixed in T24b below.
+
+**T24b — Windows worker_threads cold-start: process exits 1 after PASS (root cause and fix, 2026-09-07).**
+Branch `task/T24b-windows-exit`. `test/helpers/cold-variant.cjs` + `test/helpers/run-variants.cjs` (kept
+permanently as a Windows-only diagnostic step, "T24b diagnostics: cold-start worker_threads variant table" in
+`.github/workflows/build.yml`'s `test-windows` job) ran ten lettered variants (a-j: worker count, `decode` vs.
+`require`-only vs. `version`-only, `OMP_NUM_THREADS`/`UV_THREADPOOL_SIZE` overrides, a main-thread warm-up, a
+2 s post-PASS wait, skipping `worker.terminate()`, and a no-`worker_threads` direct-decode control) across five
+CI rounds and pinned the cause precisely:
+
+- Round 1 (runs 34137891164) reproduced the crash as `STATUS_ACCESS_VIOLATION` (`0xC0000005`, not exit code 1 --
+  a genuine data race can surface either way depending on timing) on every variant that reached LibRaw's
+  OpenMP-parallel demosaic code (`dcraw_process`, MSVC `/openmp`) from a cold worker thread -- including a
+  *single* cold worker with no other thread racing against it. `require()`-only/`version()`-only workers (never
+  touching OpenMP) never crashed, and neither did `OMP_NUM_THREADS=1` or a main-thread warm-up `require()`
+  before spawning workers.
+- Rounds 2-3 (34138930368, 34139660303) tried forcing an early OpenMP touch from application code -- inline in
+  the addon's per-`Env` constructor, then on a dedicated `std::thread` -- with byte-identical results either
+  way: forcing *every* cold worker to touch OpenMP (even via a trivial no-op `#pragma omp parallel`, no
+  `decode()` involved) made the previously-safe `require()`/`version()`-only variants crash too. Conclusion:
+  the trigger is entering OpenMP-parallel code from a cold worker thread at all, and it does not matter which
+  thread actually executes it.
+- Round 4 (34140564058, 34140957966) tried `SetEnvironmentVariableA("OMP_NUM_THREADS", "1")` in
+  `src/win_delay_load_hook.cc`'s `DllMain(DLL_PROCESS_ATTACH)` instead of touching OpenMP from application code
+  -- zero effect (variant table identical to round 1's unfixed baseline). `VCOMP140.DLL` is an ordinary
+  (non-delay-loaded) dependency of `node.napi.node`, so the Windows loader loads it -- and runs its own
+  `DllMain`, which reads `OMP_NUM_THREADS` -- *before* this addon's own `DllMain` (which sets that variable)
+  ever gets a chance to run.
+- **Root cause:** MSVC's classic OpenMP runtime (`vcomp140.dll`) is loaded and initialised as an implicit
+  dependency of `node.napi.node`, ahead of this addon's own `DllMain`; whatever internal state it establishes
+  for a thread that is the *first in the process* to enter OpenMP-parallel code is not safe across that
+  thread's own later termination when the thread is a `worker_threads` worker -- reproducibly
+  `STATUS_ACCESS_VIOLATION`, independent of concurrency, of `worker.terminate()` vs. natural exit, and of which
+  OS thread actually performs the OpenMP call.
+- **Fix (round 5, run 34141469195, confirmed green):** `CMakeLists.txt`'s `WIN32` branch now also passes
+  `/DELAYLOAD:VCOMP140.DLL` to the linker (`delayimp.lib` is already linked for `node.exe`'s own delay-load,
+  from the original T24 fix above), deferring `VCOMP140.DLL`'s actual load/`DllMain` until LibRaw's first real
+  OpenMP call. `src/win_delay_load_hook.cc`'s `DllMain` sets `OMP_NUM_THREADS=1` (only if unset) at
+  `DLL_PROCESS_ATTACH` for `node.napi.node` itself -- always the *first* load event for this addon, now
+  guaranteed to run before `VCOMP140.DLL` is ever loaded -- so vcomp reads `OMP_NUM_THREADS=1` on its own first
+  lazy initialisation and takes its single-thread/no-team-creation fast path unconditionally, which never
+  reproduced the crash in any of the 30+ CI variant runs across all five rounds. This is a real regression
+  (Windows loses `/openmp`'s multi-threaded demosaic speedup despite `buildInfo.openmp` staying `true`),
+  tracked as a T28 follow-up to fix the actual root cause and restore Windows OpenMP parallelism.
+- All ten `run-variants.cjs` variants and every cold-start step (plain Node and both Electron versions, 3 and 6
+  workers) are green without `continue-on-error` on `windows-2022`, and the `package` job is green again (run
+  34141469195).
 
 
 Read: `docs/how-to/make-the-addon-electron-safe.md` (table rows 1–12), knowledge base
