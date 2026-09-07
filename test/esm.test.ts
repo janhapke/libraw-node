@@ -26,6 +26,20 @@ import path from 'node:path';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 
+// T21: on Windows, `npm` on PATH resolves to `npm.cmd` (a batch file).
+// execFileSync/spawnSync do not consult PATHEXT the way a shell does, so
+// `execFileSync('npm', ...)` fails with ENOENT there. Passing the resolved
+// `npm.cmd` name directly doesn't fix it either -- Node refuses to spawn a
+// .cmd/.bat file without `shell: true` (EINVAL; the fix for a batch-file
+// argument-injection CVE), even via execFileSync's argv-array form. Both
+// failures were hit in turn on windows-2022 in test-windows; the working
+// combination is `shell: true` on win32 only, spawning plain `npm` and
+// letting cmd.exe's own PATHEXT resolve it to npm.cmd -- Node still quotes
+// each argv-array element for cmd.exe itself, so tmpDir/tarballPath (no
+// shell metacharacters, just a path) don't need manual escaping.
+const NPM_CMD = 'npm';
+const EXEC_OPTS_EXTRA = process.platform === 'win32' ? { shell: true as const } : {};
+
 let tmpDir: string;
 let tarballPath: string;
 let packedFiles: string[] = [];
@@ -36,9 +50,10 @@ describe('package install: ESM and CJS entry points', () => {
         // without publishing anything; write it straight into the temp
         // install dir so no stray tarball is left in the repo.
         tmpDir = mkdtempSync(path.join(tmpdir(), 'libraw-node-esm-test-'));
-        const packOutput = execFileSync('npm', ['pack', '--json', '--pack-destination', tmpDir], {
+        const packOutput = execFileSync(NPM_CMD, ['pack', '--json', '--pack-destination', tmpDir], {
             cwd: REPO_ROOT,
             encoding: 'utf8',
+            ...EXEC_OPTS_EXTRA,
         });
         const [packInfo] = JSON.parse(packOutput) as Array<{ filename: string; files: Array<{ path: string }> }>;
         // `npm pack --json`'s `filename` is already the on-disk tarball name
@@ -54,9 +69,10 @@ describe('package install: ESM and CJS entry points', () => {
             path.join(tmpDir, 'package.json'),
             JSON.stringify({ name: 'libraw-node-esm-test-consumer', version: '1.0.0', private: true }, null, 2),
         );
-        execFileSync('npm', ['install', '--no-audit', '--no-fund', '--omit=dev', tarballPath], {
+        execFileSync(NPM_CMD, ['install', '--no-audit', '--no-fund', '--omit=dev', tarballPath], {
             cwd: tmpDir,
             encoding: 'utf8',
+            ...EXEC_OPTS_EXTRA,
         });
     }, 180_000);
 

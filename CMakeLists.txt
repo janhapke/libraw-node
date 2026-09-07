@@ -9,7 +9,7 @@
 # target, mirroring scripts/spike-static-libraw.sh (T00) which recorded the
 # exact option names and flags verified in a working build. T20 adds the
 # macOS link arm (this comment used to say "T19-T21"; T19 was Linux arm64
-# only, no macOS/Windows code). Windows (T21) is still a stub.
+# only, no macOS/Windows code). T21 adds the Windows (win32-x64) link arm.
 cmake_minimum_required(VERSION 3.25)
 
 # CMAKE_OSX_DEPLOYMENT_TARGET must be set before project() to reliably affect
@@ -42,6 +42,23 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(WIN32)
+  # T21: pin /MD (the dynamic, release UCRT/vcruntime) explicitly for every
+  # target configured from here on -- zlib (add_subdirectory, below), LibRaw
+  # (raw_r) and the addon all pick this up automatically since
+  # CMAKE_MSVC_RUNTIME_LIBRARY seeds each target's MSVC_RUNTIME_LIBRARY
+  # property at the time the target is created, so this must be set before
+  # any add_library() call. This is also forwarded explicitly into the
+  # separately-configured libjpeg-turbo ExternalProject further down (its own
+  # CMake cache is independent of this one) so every static piece the addon
+  # links uses the same CRT, avoiding an MSVC "LNK2038: mismatch detected for
+  # 'RuntimeLibrary'" error. /MD matches Node.exe/Electron.exe's own CRT
+  # linkage (docs/reference/build-matrix.md); CMP0091=NEW (required for this
+  # variable to have any effect) is already implied by
+  # `cmake_minimum_required(VERSION 3.25)` above (policy introduced in 3.15).
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 option(LIBRAW_NODE_OPENMP "Compile LibRaw with OpenMP (parallel PPG/AHD/DHT/AAHD demosaic)" ON)
@@ -93,7 +110,28 @@ if(LIBRAW_NODE_NPROC EQUAL 0)
 endif()
 
 set(LIBJPEG_TURBO_BINARY_DIR "${CMAKE_BINARY_DIR}/vendor/libjpeg-turbo")
-set(LIBJPEG_TURBO_LIBRARY "${LIBJPEG_TURBO_BINARY_DIR}/libjpeg.a")
+if(WIN32)
+  # libjpeg-turbo's CMakeLists.txt only applies its Unix-style
+  # `set_target_properties(jpeg-static PROPERTIES OUTPUT_NAME jpeg)` when
+  # NOT MSVC_LIKE (see vendor/libjpeg-turbo/CMakeLists.txt ~line 770); on
+  # MSVC the target keeps its default output name, so the archive is
+  # jpeg-static.lib, not libjpeg.a.
+  set(LIBJPEG_TURBO_LIBRARY "${LIBJPEG_TURBO_BINARY_DIR}/jpeg-static.lib")
+else()
+  set(LIBJPEG_TURBO_LIBRARY "${LIBJPEG_TURBO_BINARY_DIR}/libjpeg.a")
+endif()
+
+set(LIBRAW_NODE_LIBJPEG_TURBO_EXTRA_CMAKE_ARGS "")
+if(WIN32)
+  # Forward the same static-CRT-linkage policy this file sets for the addon
+  # (T21, see the WIN32 addon link arm below) into the nested libjpeg-turbo
+  # configure so its objects use the matching /MD runtime -- a mismatch here
+  # is a classic MSVC "LNK2038: mismatch detected for 'RuntimeLibrary'" link
+  # error waiting to happen once raw_r links jpeg-static.lib.
+  list(APPEND LIBRAW_NODE_LIBJPEG_TURBO_EXTRA_CMAKE_ARGS
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>DLL
+    -DCMAKE_POLICY_DEFAULT_CMP0091=NEW)
+endif()
 
 ExternalProject_Add(libjpeg_turbo_ext
   SOURCE_DIR "${CMAKE_SOURCE_DIR}/vendor/libjpeg-turbo"
@@ -109,6 +147,7 @@ ExternalProject_Add(libjpeg_turbo_ext
     -DWITH_TOOLS=OFF
     -DWITH_TESTS=OFF
     -DWITH_SIMD=ON
+    ${LIBRAW_NODE_LIBJPEG_TURBO_EXTRA_CMAKE_ARGS}
   BUILD_COMMAND ${CMAKE_COMMAND} --build "${LIBJPEG_TURBO_BINARY_DIR}" --target jpeg-static -- -j${LIBRAW_NODE_NPROC}
   INSTALL_COMMAND ""
   BUILD_BYPRODUCTS "${LIBJPEG_TURBO_LIBRARY}"
@@ -212,6 +251,24 @@ if(LIBRAW_NODE_OPENMP)
     else()
       target_compile_options(raw_r PRIVATE -Xpreprocessor -fopenmp "-I${LIBRAW_NODE_OMP_ROOT}/include")
     endif()
+  elseif(WIN32)
+    # T21: MSVC ships no static OpenMP runtime at all (neither the classic
+    # /openmp `vcomp140.dll` nor clang-cl's /openmp:llvm `libomp140.x86_64.dll`
+    # have a static archive variant) -- unlike Linux (dynamic libgomp.so.1,
+    # T04) or macOS (static libomp.a from Homebrew, T20), "static OpenMP on
+    # Windows" is simply not an option MSVC offers. Per the decision rule in
+    # docs/plan/tasks.md's T21 section: use plain MSVC `/openmp` (not
+    # `/openmp:llvm`, which needs clang-cl, a separate toolchain not set up
+    # here) and accept VCOMP140.dll as one documented dynamic dependency --
+    # scripts/check-binary-windows.ps1 allows exactly this DLL and nothing
+    # else beyond the CRT/kernel32 baseline; README.md and
+    # docs/reference/build-matrix.md record it as a runtime requirement.
+    if(NOT MSVC)
+      message(WARNING "LIBRAW_NODE_OPENMP requested on Windows but compiler is not MSVC (${CMAKE_CXX_COMPILER_ID}); disabling")
+      set(LIBRAW_NODE_OPENMP OFF)
+    else()
+      target_compile_options(raw_r PRIVATE /openmp)
+    endif()
   elseif(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(WARNING "LIBRAW_NODE_OPENMP requested but compiler is ${CMAKE_CXX_COMPILER_ID}; disabling")
     set(LIBRAW_NODE_OPENMP OFF)
@@ -272,12 +329,23 @@ if(Git_FOUND)
   endif()
 endif()
 
-set(LIBRAW_NODE_BUILDINFO_FLAGS "-std=c++17 -O2 -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions -DLIBRAW_NODLL -DUSE_ZLIB -DUSE_JPEG -DUSE_JPEG8 -DNAPI_VERSION=8 -DNODE_API_NO_EXTERNAL_BUFFERS_ALLOWED -DNAPI_CPP_EXCEPTIONS")
+if(WIN32)
+  # MSVC's own flag spelling (T21) -- genuinely different from the GNU/Clang
+  # style used on Linux/macOS below, not just a cosmetic rename.
+  set(LIBRAW_NODE_BUILDINFO_FLAGS "/EHsc /MD /O2 /DLIBRAW_NODLL /DUSE_ZLIB /DUSE_JPEG /DUSE_JPEG8 /DNAPI_VERSION=8 /DNODE_API_NO_EXTERNAL_BUFFERS_ALLOWED /DNAPI_CPP_EXCEPTIONS")
+else()
+  set(LIBRAW_NODE_BUILDINFO_FLAGS "-std=c++17 -O2 -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions -DLIBRAW_NODLL -DUSE_ZLIB -DUSE_JPEG -DUSE_JPEG8 -DNAPI_VERSION=8 -DNODE_API_NO_EXTERNAL_BUFFERS_ALLOWED -DNAPI_CPP_EXCEPTIONS")
+endif()
 if(LIBRAW_NODE_OPENMP)
   if(APPLE)
     # Reflects the actual macOS OpenMP compile line (see the LIBRAW_NODE_OMP_ROOT
     # block above) rather than the GNU/Clang -fopenmp used on Linux.
     string(APPEND LIBRAW_NODE_BUILDINFO_FLAGS " -Xpreprocessor -fopenmp -I${LIBRAW_NODE_OMP_ROOT}/include")
+  elseif(WIN32)
+    # /openmp (T21): dynamically links VCOMP140.dll -- the one documented
+    # sidecar exception on Windows; see the CMAKE_CXX_COMPILER_ID MATCHES
+    # block above and README.md / docs/reference/build-matrix.md for why.
+    string(APPEND LIBRAW_NODE_BUILDINFO_FLAGS " /openmp")
   else()
     string(APPEND LIBRAW_NODE_BUILDINFO_FLAGS " -fopenmp")
   endif()
@@ -371,6 +439,20 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   # CMAKE_CXX_VISIBILITY_PRESET already adds -fvisibility=hidden; -fexceptions
   # is needed because NAPI_CPP_EXCEPTIONS assumes C++ exceptions are enabled.
   target_compile_options(addon PRIVATE -fexceptions)
+elseif(MSVC)
+  # T21: /EHsc is MSVC's equivalent of -fexceptions (standard C++ exception
+  # unwinding, no extern "C" functions assumed noexcept) -- required for the
+  # same NAPI_CPP_EXCEPTIONS reason as the GNU/Clang branch above.
+  # CMAKE_CXX_VISIBILITY_PRESET (hidden) is a no-op on MSVC (that property
+  # only affects ELF/Mach-O); Windows symbol export instead goes through
+  # __declspec(dllexport)/dllimport, which node-api-headers already applies
+  # automatically via NAPI_MODULE_EXPORT/NAPI_EXTERN -- see BUILDING_NODE_EXTENSION
+  # below for why that resolves to dllimport for the *imported* napi_*
+  # functions and dllexport only for our own two module-registration entry
+  # points, matching Linux's version-script/macOS's exported-symbols-list
+  # intent without needing an explicit .def file of our own.
+  target_compile_options(addon PRIVATE /EHsc)
+  target_compile_options(raw_r PRIVATE /EHsc)
 endif()
 
 if(LINUX)
@@ -455,7 +537,60 @@ elseif(APPLE)
     target_link_libraries(addon PRIVATE "${LIBRAW_NODE_OMP_ROOT}/lib/libomp.a")
   endif()
 elseif(WIN32)
-  # T21 adds the Windows-specific link arm (win_delay_load_hook.cc,
-  # /DELAYLOAD:node.exe, node.lib).
-  message(WARNING "Windows link flags are not implemented yet; see T21.")
+  # T21: unlike macOS (no libnode/node.lib exists there at all, so unresolved
+  # napi_*/node_api_* symbols are left for the loading process to resolve --
+  # see the APPLE branch above), Windows DLLs cannot have unresolved imports:
+  # the loader refuses to load a DLL whose import table cannot be satisfied
+  # at load time. A native addon therefore always needs *some* import library
+  # to link against. node-gyp solves this by downloading the pinned Node
+  # version's prebuilt node.lib from nodejs.org; this project avoids that
+  # extra pinned download by synthesizing an equivalent import library from
+  # node-api-headers' own .def files (added for exactly this purpose, see
+  # node-api-headers' CHANGELOG "Provide def file for windows import lib")
+  # with `lib.exe /def:... /out:node.lib` -- see scripts/build-native.ps1.
+  # LIBRAW_NODE_NODE_LIB is that generated import library's path, passed in
+  # via -D by the script; there is no sane default to fall back to.
+  if(NOT LIBRAW_NODE_NODE_LIB)
+    message(FATAL_ERROR "WIN32 build requires -DLIBRAW_NODE_NODE_LIB=<path to node.lib> (see scripts/build-native.ps1, T21)")
+  endif()
+  if(NOT EXISTS "${LIBRAW_NODE_NODE_LIB}")
+    message(FATAL_ERROR "LIBRAW_NODE_NODE_LIB (${LIBRAW_NODE_NODE_LIB}) does not exist")
+  endif()
+
+  # BUILDING_NODE_EXTENSION flips node-api-headers' NAPI_EXTERN macro from
+  # its unconditional-on-Windows default of __declspec(dllexport) (meant for
+  # node.exe's own build, which *defines* these functions) to
+  # __declspec(dllimport) (what every native addon needs: napi_* symbols are
+  # *implemented* in node.exe/electron.exe and merely imported here, resolved
+  # against LIBRAW_NODE_NODE_LIB above). This is exactly the define node-gyp
+  # injects into every Windows addon build via its common.gypi; see
+  # node_modules/node-api-headers/include/node_api.h's NAPI_EXTERN block.
+  # HOST_BINARY names the module win_delay_load_hook.cc's load_exe_hook()
+  # intercepts (must match the /DELAYLOAD:node.exe linker flag below and the
+  # "LIBRARY NODE.EXE" statement in the generated node.lib's def).
+  target_sources(addon PRIVATE src/win_delay_load_hook.cc)
+  target_compile_definitions(addon PRIVATE
+    BUILDING_NODE_EXTENSION
+    HOST_BINARY="node.exe"
+    _CRT_SECURE_NO_WARNINGS
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN)
+  target_compile_definitions(raw_r PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN)
+  # Matches Makefile.msvc's own /W0 for LibRaw's sources (vendor/LibRaw is
+  # not our code to keep warning-clean; this only silences raw_r, not
+  # addon.cc and friends, which stay at MSVC's default warning level).
+  target_compile_options(raw_r PRIVATE /W0)
+
+  # delayimp.lib + /DELAYLOAD:node.exe defer resolving node.exe's imports
+  # until first use, and win_delay_load_hook.cc's __pfnDliNotifyHook2
+  # intercepts that resolution to redirect it at the *current* process image
+  # instead of literally looking for a file named node.exe on disk -- the fix
+  # for Electron (electron.exe, not node.exe) described in
+  # docs/explanation/electron-compatibility.md §3 /
+  # docs/how-to/make-the-addon-electron-safe.md row 3.
+  target_link_libraries(addon PRIVATE "${LIBRAW_NODE_NODE_LIB}" delayimp.lib)
+  target_link_options(addon PRIVATE "/DELAYLOAD:node.exe")
 endif()

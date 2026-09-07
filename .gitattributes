@@ -1,0 +1,23 @@
+# T21: without this, actions/checkout@v4 on windows-2022 honors that
+# runner's global core.autocrlf=true and rewrites every text file's line
+# endings to CRLF on checkout. Every generated file this repo's `gen:*`
+# scripts write (scripts/gen-errors.js and friends) is written with LF
+# endings regardless of host OS (plain Node fs.writeFileSync, no platform
+# newline translation), so `npm run gen:check` compares that LF output
+# against a CRLF-converted working-tree file and reports every generated
+# file as "stale" -- discovered on windows-2022 in T21's build-windows job.
+# `eol=lf` pins checked-out line endings to LF on every platform, overriding
+# the runner's core.autocrlf; `text=auto` still lets git auto-detect binary
+# files (so this rule is a no-op for them) while normalizing everything else.
+* text=auto eol=lf
+
+# Explicit binary marks for the fixtures most likely to trip git's
+# binary-detection heuristic if their content ever starts with mostly-ASCII
+# bytes (TIFF/DNG headers can): never let these round-trip through any
+# newline conversion.
+*.dng binary
+*.DNG binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.node binary

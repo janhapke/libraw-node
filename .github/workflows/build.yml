@@ -173,3 +173,105 @@ jobs:
       - run: npm test
 
       - run: otool -L prebuilds/${{ matrix.target }}/node.napi.node
+
+  # T21: win32-x64. windows-2022 runner (docs/reference/build-matrix.md). No
+  # Docker/cross path here either -- MSVC only targets Windows from a
+  # Windows host, same reasoning as build-macos (T20) for Darwin. Two
+  # Windows-specific pieces build-native.sh/build-linux.sh never needed:
+  # (1) node.lib, synthesized from node-api-headers' .def files with lib.exe
+  # (no libnode/node.lib to link against otherwise -- see
+  # scripts/build-native.ps1 and CMakeLists.txt's WIN32 link arm), and
+  # (2) the win_delay_load_hook.cc + /DELAYLOAD:node.exe pair that makes the
+  # addon load under Electron (electron.exe, not node.exe) --
+  # docs/how-to/make-the-addon-electron-safe.md row 3 /
+  # docs/explanation/electron-compatibility.md §3.
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Read pinned Node version
+        shell: bash
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - run: npm run gen:check
+
+      # Puts cl.exe/lib.exe/link.exe/dumpbin.exe/nmake.exe on PATH for every
+      # subsequent step in this job (a Developer Command Prompt environment,
+      # without needing to wrap each step in vcvarsall.bat by hand).
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # libjpeg-turbo's WITH_SIMD=ON x64 SIMD extensions are written in NASM,
+      # not inline/intrinsic asm -- same requirement build-native.sh covers
+      # with `brew install nasm` on macOS x64 (T20).
+      - uses: ilammy/setup-nasm@v1
+
+      # windows-2022 runner images generally ship Ninja already, but install
+      # explicitly so this doesn't depend on that image detail -- Ninja is
+      # the single-config generator scripts/build-native.ps1 picks (see its
+      # header comment for why, vs. the default multi-config
+      # "Visual Studio 17 2022" generator).
+      - name: Install Ninja
+        run: choco install ninja --no-progress -y
+
+      - name: Build native addon (win32-x64)
+        run: ./scripts/build-native.ps1 -Target win32-x64
+
+      - name: dumpbin /DEPENDENTS
+        run: dumpbin /DEPENDENTS prebuilds/win32-x64/node.napi.node /nologo
+
+      - name: "dumpbin /IMPORTS (delay-load node.exe excerpt)"
+        run: dumpbin /IMPORTS prebuilds/win32-x64/node.napi.node /nologo | Select-String -Context 0,3 "node.exe"
+
+      - name: dumpbin /EXPORTS
+        run: dumpbin /EXPORTS prebuilds/win32-x64/node.napi.node /nologo
+
+      - run: ./scripts/check-binary-windows.ps1 -FilePath prebuilds/win32-x64/node.napi.node
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-win32-x64
+          path: prebuilds/win32-x64
+
+  test-windows:
+    needs: build-windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned Node version
+        shell: bash
+        run: grep '^NODE_VERSION=' scripts/versions.env | cut -d= -f2 | sed 's/^/NODE_VERSION=/' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-win32-x64
+          path: prebuilds/win32-x64
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Print buildInfo (records openmp true/false and the exact flags in the job log)
+        run: node -e "const l=require('./lib/index.cjs');console.log(JSON.stringify(l.buildInfo))"
+
+      - run: npm test
+
+      - name: dumpbin /DEPENDENTS
+        run: dumpbin /DEPENDENTS prebuilds/win32-x64/node.napi.node /nologo

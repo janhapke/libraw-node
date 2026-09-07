@@ -36,6 +36,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { extractStructBody, parseStructFields } = require('./lib/cstruct.js');
+const { relativePosix } = require('./lib/paths.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES_HEADER_PATH = path.join(ROOT, 'vendor/LibRaw/libraw/libraw_types.h');
@@ -183,7 +184,7 @@ function buildManifest() {
   const manifest = {
     generator: 'scripts/gen-manifest.js',
     libraw: { version: libraw.string, major: libraw.major, minor: libraw.minor, patch: libraw.patch },
-    source: path.relative(ROOT, TYPES_HEADER_PATH),
+    source: relativePosix(ROOT, TYPES_HEADER_PATH),
     structs: structsOut,
   };
 

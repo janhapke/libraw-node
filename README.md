@@ -5,7 +5,12 @@ decoding library. Statically links LibRaw, zlib, and libjpeg-turbo, and no compi
 consumer's machine — prebuilt binaries ship per platform. On Linux, `libgomp.so.1` (GCC's OpenMP runtime,
 used for parallel demosaic) is the one dynamic dependency beyond libc/libm/libpthread/libdl — every Linux
 system with a GCC toolchain already has it; see the `target_link_libraries(addon PRIVATE gomp)` comment in
-`CMakeLists.txt` for why it cannot be statically linked into a shared object with this toolchain.
+`CMakeLists.txt` for why it cannot be statically linked into a shared object with this toolchain. On
+Windows (`win32-x64`), `VCOMP140.dll` (Microsoft's own OpenMP runtime, part of the Visual C++
+Redistributable) is the equivalent dynamic dependency for the same reason — MSVC ships no static OpenMP
+runtime at all; see [Building from source](#building-from-source) and
+`docs/reference/build-matrix.md` for the full picture, including what happens on machines without that
+redistributable installed.
 
 This package is not scoped to any single consumer application — see
 `docs/explanation/adoption-comparison.md` for the design rationale.
@@ -261,15 +266,23 @@ calls, with every result's checksum verified against a single-threaded reference
 
 ## Building from source
 
-Prebuilt binaries cover the platforms in `docs/reference/build-matrix.md`. To build the native addon
-yourself (e.g. an unsupported platform), everything compiles inside Docker — no compiler is required on
-the host:
+Prebuilt binaries cover the platforms in `docs/reference/build-matrix.md`. On Linux, everything compiles
+inside Docker — no compiler is required on the host:
 
 ```bash
 npm run build:linux        # scripts/build-linux.sh x64 — builds scripts/linux-build.Dockerfile,
                             # compiles LibRaw/zlib/libjpeg-turbo/the addon statically inside it, and
                             # copies the stripped result to prebuilds/linux-x64/node.napi.node
 ```
+
+macOS and Windows have no Docker/cross-compilation path (Xcode and MSVC are only licensed/available on
+their own OS) and build natively instead: `scripts/build-native.sh darwin-x64|darwin-arm64` (macOS,
+requires Xcode command line tools and, for OpenMP, `brew install libomp`) and
+`scripts/build-native.ps1 -Target win32-x64` (Windows, requires Visual Studio 2022's MSVC toolset — via a
+Developer Command Prompt or `ilammy/msvc-dev-cmd` in CI — plus `nasm` on `PATH` for libjpeg-turbo's SIMD
+and CMake/Ninja). Both are what `.github/workflows/build.yml`'s `build-macos`/`build-windows` jobs run;
+see those scripts' own header comments for the platform-specific details (node.lib synthesis and the
+delay-load hook on Windows, static `libomp` linking on macOS).
 
 See `docs/how-to/build-libraw-addon-in-docker.md` for what the Docker image contains and why, and
 `docs/explanation/build-and-distribution-strategy.md` for the overall prebuild strategy.
@@ -311,6 +324,11 @@ MIT for the binding itself. Vendored/linked components carry their own licences:
   (BSD-3-Clause), and the zlib licence.
 - **libgomp** (GCC's OpenMP runtime, linked dynamically on Linux — see the note at the top of this file) —
   GPL-3 with the GCC Runtime Library Exception, which permits this use.
+- **libomp** (LLVM's OpenMP runtime, linked statically on macOS from Homebrew's `libomp` keg) —
+  Apache-2.0 with the LLVM exception.
+- **VCOMP140.dll** (Microsoft's own OpenMP runtime, linked dynamically on Windows — see the note at the
+  top of this file) — not vendored or redistributed by this package; ships with the Visual C++
+  Redistributable, which any MSVC-built consumer (Electron included) generally already requires.
 
 Full texts and per-component versions: [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and
 [`docs/explanation/licensing.md`](./docs/explanation/licensing.md).

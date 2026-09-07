@@ -41,6 +41,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { relativePosix } = require('./lib/paths.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const MANIFEST_PATH = path.join(ROOT, 'api/params.json');
@@ -419,7 +420,7 @@ function renderCc(manifest) {
   const lines = [
     '// GENERATED FILE -- do not edit by hand.',
     '// Regenerate with `npm run gen:params-cc` (scripts/gen-params-cc.js).',
-    `// Source: ${path.relative(ROOT, MANIFEST_PATH)} (LibRaw ${manifest.libraw.version}).`,
+    `// Source: ${relativePosix(ROOT, MANIFEST_PATH)} (LibRaw ${manifest.libraw.version}).`,
     '//',
     '// Implements the four functions declared by src/params.h -- see that',
     "// header's comments for the validation rules each field type gets and",

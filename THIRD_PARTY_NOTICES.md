@@ -40,12 +40,33 @@ prebuilt native addon. This file is regenerated from `scripts/versions.env` by `
 - Source: https://github.com/nodejs/node-addon-api
 - Licence: MIT.
 
+## libomp (macOS only)
+
+- Used on `darwin-x64`/`darwin-arm64` for OpenMP support (`T20`): Homebrew's `libomp` keg, linked
+  statically (`lib/libomp.a`) into the addon.
+- Source: https://github.com/llvm/llvm-project (`openmp` subproject)
+- Licence: Apache-2.0 with LLVM exception.
+- Licence text: `LICENSE.TXT` inside the Homebrew `libomp` keg's `share/doc/libomp` (not vendored in this
+  repository; the CI runner installs the keg at build time).
+
+## node-gyp (Windows delay-load hook only)
+
+- `src/win_delay_load_hook.cc` is copied verbatim (with its original header comment kept) from
+  [`nodejs/node-gyp`](https://github.com/nodejs/node-gyp) at tag `v11.2.0`
+  (`src/win_delay_load_hook.cc`), compiled into the `win32-x64` addon only (`T21`). It is the same
+  delay-load hook `node-gyp`/`cmake-js` addons get automatically; this project's CMake build wires it in
+  by hand since it does not use `node-gyp`. See `docs/how-to/make-the-addon-electron-safe.md` row 3.
+- Source: https://github.com/nodejs/node-gyp
+- Licence: MIT.
+
 ---
 
-Not vendored/linked yet but reserved by the build strategy (`docs/explanation/build-and-distribution-strategy.md`):
+Not vendored/linked, but relevant to note:
 
-- **libgomp** (GCC OpenMP runtime), used on Linux for OpenMP support (`T03`): GPL-3 with the GCC Runtime
-  Library Exception. Static linking is permitted under that exception when compiled with GCC; this will
-  be documented here again once T03 lands.
-- **libomp** (LLVM OpenMP runtime), used on macOS/Windows if enabled (`T20`/`T21`): Apache-2.0 with LLVM
-  exception.
+- **libgomp** (GCC OpenMP runtime), used on Linux for OpenMP support (`T03`/`T04`): GPL-3 with the GCC
+  Runtime Library Exception, linked **dynamically** (`libgomp.so.1`, ships with every GCC/glibc Linux
+  install) rather than statically, so no GPL obligations attach to this MIT package.
+- **vcomp140.dll** (Microsoft's own OpenMP runtime, part of the Visual C++ Redistributable), used on
+  `win32-x64` for OpenMP support (`T21`, MSVC's `/openmp`): linked dynamically only, never bundled or
+  redistributed by this package -- it is a runtime dependency documented in `README.md` and
+  `docs/reference/build-matrix.md`, not a vendored component, so no notice/licence text applies here.

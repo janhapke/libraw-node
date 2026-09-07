@@ -92,6 +92,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { relativePosix } = require('./lib/paths.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const MANIFEST_PATH = path.join(ROOT, 'api/metadata.json');
@@ -346,7 +347,7 @@ function renderCc(manifest) {
   const lines = [
     '// GENERATED FILE -- do not edit by hand.',
     '// Regenerate with `npm run gen:metadata-cc` (scripts/gen-metadata-cc.js).',
-    `// Source: ${path.relative(ROOT, MANIFEST_PATH)} (LibRaw ${manifest.libraw.version}).`,
+    `// Source: ${relativePosix(ROOT, MANIFEST_PATH)} (LibRaw ${manifest.libraw.version}).`,
     '//',
     '// Implements MetadataToObject, declared by src/metadata.h -- see that',
     "// header's comment and this generator's own header comment for the",
