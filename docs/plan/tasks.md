@@ -603,6 +603,17 @@ Acceptance:
 
 ### T24 — Electron safety checks as a script, and an asar packaging test
 
+> **Open item from T22 (2026-09-07):** on `windows-2022` under Electron 42/44, three `worker_threads` doing their
+> *first* `require()` of the addon concurrently produced no output at all (job step died silently, twice). The
+> smoke test now does a single-threaded warm-up `require()` on the main thread before spawning workers, which
+> masks the problem. photoview's `DecodeWorkerPool` spawns workers that each require the addon without a
+> main-thread warm-up, so T24 must investigate: suspect the delay-load hook (`src/win_delay_load_hook.cc`,
+> process-wide `__pfnDliNotifyHook2` + first `node.exe` import resolution) or static initialisers racing on
+> first N-API call. Reproduce with a cold-start workers script in the Windows job, fix in C++ (e.g. serialise
+> first-load in `DllMain`-free way: resolve the delay-load once in `napi_register_module_v1`), and remove the
+> warm-up from `test/electron-workers-smoke.cjs` once fixed.
+
+
 Read: `docs/how-to/make-the-addon-electron-safe.md` (table rows 1–12), knowledge base
 `/home/jan/dev/_jdd/knowledge-base/electron-native-modules.md`.
 
