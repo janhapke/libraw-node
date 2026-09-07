@@ -635,6 +635,18 @@ Acceptance:
 > confirmation; if `test-windows` then fails on the cold script, the root cause is not (only) the delay-load
 > race and must be re-investigated (the observed symptom, exit code 1 about 0.3 s *after* the PASS line, also
 > fits a teardown-time crash rather than a first-load race).
+>
+> **Confirmed NOT fixed (2026-09-07 15:06 UTC, run 34136306293 on `main`):** `test-windows` step "Cold-start
+> worker_threads smoke test (plain node, 3 workers)" prints `PASS workers=3 cold=true electron=none` and the
+> process still exits with code 1 about 0.34 s later, with no further output. The `DllMain` change therefore
+> does not address the cause. Open follow-up (T24b): reproduce on `windows-2022` with `--trace-exit`,
+> `--trace-uncaught`, `process.on('exit')`/`worker.on('error'|'exit')` logging and per-worker exit codes, and
+> check whether the failure needs `worker_threads` at all (run 3 sequential `require`+decode in one thread) and
+> whether it is teardown-related (add `await new Promise(r => setTimeout(r, 1000))` before natural exit, or
+> `worker.terminate()` ordering). Candidates: N-API env cleanup hooks running per worker exit (Processor/
+> AsyncWorker instance data, `Napi::Addon` per-env instance destructors), OpenMP `vcomp140` thread-pool
+> teardown on a worker thread, or a DLL_THREAD_DETACH path. All other jobs (linux x64/arm64, darwin x64/arm64,
+> build-windows incl. `dumpbin`) are green on this run; only the Windows test job blocks the `package` job.
 
 
 Read: `docs/how-to/make-the-addon-electron-safe.md` (table rows 1–12), knowledge base
