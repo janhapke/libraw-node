@@ -113,3 +113,10 @@ tarball pin + CI run; expect two per year.
    experiment.
 5. 16-bit output: **not designed for now** (`output_bps` stays exposed, but the result API is 8-bit RGB;
    16-bit can be added later as a `bits: 16` variant of the same buffer shape).
+
+### Decisions log (post-implementation)
+
+- 2026-09-07: Linux prebuilds keep the dynamic `libgomp.so.1` link (gcc-toolset-14's `libgomp.a` cannot be
+  linked into a shared object); consumers install `libgomp1`/`libgomp`. Windows keeps `VCOMP140.dll` and, since
+  T24b, forces `OMP_NUM_THREADS=1` unless the host sets it (cold worker-thread crash in vcomp); restoring Windows
+  parallelism is the remaining T28 item.

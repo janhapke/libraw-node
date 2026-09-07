@@ -760,8 +760,10 @@ the human installs it and confirms RAW folders render (the only step needing a d
 > sidecar-free goal from `docs/explanation/build-and-distribution-strategy.md` therefore needs one of:
 > (a) LLVM `libomp` built from source with `-fPIC` and linked statically on Linux as well (its `GOMP_*`
 > compatibility layer lets gcc `-fopenmp` objects link against it), or (b) accepting a `libgomp1` package
-> dependency for Linux consumers (photoview's `.deb` would declare it). **Decision pending with Jan.** Until
-> then `scripts/check-binary.sh` allows `libgomp.so.1` in NEEDED.
+> dependency for Linux consumers (photoview's `.deb` would declare it). **Decided 2026-09-07 (Jan): option (b),
+> accept the dynamic `libgomp.so.1` link.** `scripts/check-binary.sh` allows `libgomp.so.1` in NEEDED, the README
+> names the packages (`libgomp1` on Debian/Ubuntu, `libgomp` on Fedora/RHEL), the loader adds a hint to the
+> load error, and photoview's `.deb` declares `libgomp1`. Option (a) stays an optional later improvement.
 
 > **macOS is resolved, not in scope here (added 2026-09-06 after T20, corrected same day):** an earlier
 > revision of this note reported `buildInfo.openmp === false` on both macOS targets with a suspected static

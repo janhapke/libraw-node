@@ -36,6 +36,11 @@ never runs a compiler on your machine. Requires **Node.js ≥ 22**.
 | `darwin-arm64` | none | Same, native Apple Silicon build |
 | `win32-x64` | `VCOMP140.dll` (part of the Visual C++ Redistributable) | MSVC ships no static OpenMP runtime at all; any MSVC-built Electron/Node app generally already needs the redistributable |
 
+Linux package names for that runtime: `libgomp1` (Debian, Ubuntu), `libgomp` (Fedora, RHEL, Rocky), part of
+`gcc-libs` (Arch). Desktop installs almost always have it; minimal containers (`node:slim` and similar) need
+`apt-get install -y libgomp1` first. Electron apps packaged as `.deb` should list `libgomp1` in `depends`.
+If it is missing, `require('@janhapke/libraw')` fails with a load error that names the package.
+
 On Linux, `libgomp.so.1` (used for parallel demosaic) is the one dynamic dependency beyond
 libc/libm/libpthread/libdl — see the `target_link_libraries(addon PRIVATE gomp)` comment in
 `CMakeLists.txt` for why it cannot be statically linked into a shared object with this toolchain. On
