@@ -625,8 +625,14 @@ Acceptance:
 > calls `__HrLoadAllImportsForDll(HOST_BINARY)` once, synchronously, before any application thread can execute
 > code from the DLL (`DLL_PROCESS_ATTACH` runs exactly once per process, under the loader lock), removing the
 > racy lazy-resolution path entirely. Confirmed green on `windows-2022` (plain Node and both Electron
-> versions, 3 and 6 workers) after the fix; the warm-up is removed from `test/electron-workers-smoke.cjs`, and
-> the cold script runs permanently (no `continue-on-error`) on all five CI test jobs.
+> versions, 3 and 6 workers) after the fix **is NOT yet established**: the two CI runs pushed after the fix
+> (34120680080, 34121864618 on 2026-09-07 12:26/12:27 UTC) failed after 11 s with every job at zero steps,
+> i.e. no runner was ever assigned (suspected: the private repo's GitHub Actions minutes exhausted by the
+> macOS jobs, which bill at 10×). The warm-up is removed from `test/electron-workers-smoke.cjs` and the cold
+> script runs without `continue-on-error` on all five CI test jobs, so the next successful run on `main` is the
+> confirmation; if `test-windows` then fails on the cold script, the root cause is not (only) the delay-load
+> race and must be re-investigated (the observed symptom, exit code 1 about 0.3 s *after* the PASS line, also
+> fits a teardown-time crash rather than a first-load race).
 
 
 Read: `docs/how-to/make-the-addon-electron-safe.md` (table rows 1–12), knowledge base
