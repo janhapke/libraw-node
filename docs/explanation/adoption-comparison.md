@@ -49,17 +49,30 @@ Net: mostly a **packaging and format-coverage** step with a real risk of two reg
 
 ## Measured after the migration (2026-09-03, `IMGP5127.DNG`, this machine, 16 cores)
 
-| Stage | Ubuntu LibRaw 0.21.5, OpenMP | same, `OMP_NUM_THREADS=1` | lightdrift 1.0.0 (vendored 0.22.2) |
-|---|---|---|---|
-| open | ~1 ms | ~1 ms | 50–68 ms (28 MB input cloned into its worker) |
-| unpack | 360–400 ms | 354 ms | 440–490 ms |
-| dcraw_process, PPG | 239 ms | 520 ms | 530–570 ms |
-| make_mem_image | 60 ms | 66 ms | 150–170 ms (48 MB result cloned back) |
-| total | ~700 ms | ~940 ms | ~1210 ms |
-| half_size total | 486 ms | 486 ms | 600–680 ms |
-| AHD dcraw_process | 378 ms | 1330 ms | (not used) |
+| Stage | Ubuntu LibRaw 0.21.5, OpenMP | same, `OMP_NUM_THREADS=1` | lightdrift 1.0.0 (vendored 0.22.2) | `@janhapke/libraw`, measured (T25) |
+|---|---|---|---|---|
+| open | ~1 ms | ~1 ms | 50–68 ms (28 MB input cloned into its worker) | 0.12 ms |
+| unpack | 360–400 ms | 354 ms | 440–490 ms | 406.5 ms |
+| dcraw_process, PPG | 239 ms | 520 ms | 530–570 ms | 287.2 ms |
+| make_mem_image | 60 ms | 66 ms | 150–170 ms (48 MB result cloned back) | 54.3 ms |
+| total | ~700 ms | ~940 ms | ~1210 ms | 575.7 ms (`decode()`, `user_qual: 2`, median of 5) |
+| half_size total | 486 ms | 486 ms | 600–680 ms | 451.8 ms (`half_size: true` + `user_qual: 2`) |
+| AHD dcraw_process | 378 ms | 1330 ms | (not used) | 728.7 ms (`decode()` total, `user_qual: 3`, not broken out by stage) |
 
 Embedded-JPEG thumbnail extraction after `openBuffer` costs 1–2 ms in 1.0.0; the old 378 ms was the wasted unpack.
+
+The `@janhapke/libraw` column is measured with the committed T25 benchmark command
+(`scripts/bench.cjs`), not estimated: `LIBRAW_TEST_IMAGES=/home/jan/dev/photoview/.private/testimages npm
+run bench -- $LIBRAW_TEST_IMAGES --iterations 5`, on this same 16-core machine, OpenMP on (`buildInfo.openmp
+=== true`), `OMP_NUM_THREADS` unset. The `open`/`unpack`/`dcraw_process`/`make_mem_image` row values come
+from `decodeSync(..., { stages: true }, { user_qual: 2 })`'s per-stage timings (a single run); `total`,
+`half_size total`, and the `user_qual: 3` figure are `decode()`'s own median wall-clock time across 5
+iterations (open+unpack+process+copy all included, async path, not just the sum of the staged numbers,
+which is why `total` and the stage sum both appear close but are not identical measurements). `identify()`
+measured 0.41 ms and `thumbnail()` 0.5 ms on this file — see
+[`bench/2026-09-07-linux-x64-16core.json`](../../bench/2026-09-07-linux-x64-16core.json) for the full
+results (all seven test RAWs, every raw sample, and the environment header) and the
+[Benchmark section of the README](../../README.md#benchmark) for how to reproduce this.
 
 ## Summary per tier (16 MP DNG, this machine, medians)
 
@@ -68,9 +81,13 @@ Embedded-JPEG thumbnail extraction after `openBuffer` costs 1–2 ms in 1.0.0; t
 | metadata (per plugin) | ~350 ms (est., unpack) | ~5 ms | ~5 ms | ~5 ms |
 | thumbnail 400 px | 378 ms (measured) | ~40–80 ms (default largest thumb + resize) | ~15–40 ms (right-sized thumb) | same |
 | preview (screen) | 378 ms (measured, embedded) or full | ~40–80 ms embedded; `half_size` fallback ~500 ms | ~40–80 ms; `half_size` fallback ~450 ms | ~40–80 ms; fallback ~400 ms |
-| full (screen, AHD) | 1105 ms (measured, OpenMP AHD) | ~1.4–1.9 s (single-thread AHD) or ~1.0 s with `user_qual: 2` | ~1.3–1.7 s AHD / ~0.9 s PPG (single-thread, fewer copies) | ~0.9–1.0 s AHD / ~0.7 s PPG |
+| full (screen, AHD) | 1105 ms (measured, OpenMP AHD) | ~1.4–1.9 s (single-thread AHD) or ~1.0 s with `user_qual: 2` | ~1.3–1.7 s AHD / ~0.9 s PPG (single-thread, fewer copies) | ~0.9–1.0 s AHD / ~0.7 s PPG (est.); **measured (T25): 728.7 ms AHD / 575.7 ms PPG** |
 | lossy DNG | works (Linux/macOS) | fails | works | works |
 | deflate DNG | fails on Linux | works | works | works |
 | install on a fresh machine | apt + rebuild | `npm install` | `npm install` | `npm install` |
 
-The numbers in the last three columns are estimates; the first benchmark run after Phase 0 replaces them.
+The "Self-built v1 (no OpenMP)" and "lightdrift 1.0.0" columns remain estimates. The "Self-built +
+OpenMP" column's `full` row is now measured (T25, 2026-09-07, `IMGP5127.DNG`, this same 16-core machine) —
+see the table and citation above; `metadata`/`thumbnail`/`preview` for `@janhapke/libraw` measured 0.41 ms,
+0.5 ms, and 451.8 ms (`half_size` fallback) respectively on this file, consistent with the estimates in
+this row.

@@ -1,0 +1,538 @@
+{
+  "date": "2026-09-07",
+  "host": "linux-x64-16core",
+  "environment": {
+    "package_version": "0.0.0",
+    "libraw_version": "0.22.2",
+    "openmp": true,
+    "compiler": "GNU 14.2.1",
+    "cpu_count": 16,
+    "cpu_model": "AMD Ryzen 7 3700X 8-Core Processor",
+    "omp_num_threads": "unset",
+    "uv_threadpool_size": "default 4",
+    "node_version": "v24.11.1",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "iterations": 5,
+  "results": [
+    {
+      "file": "DSC_4985.NEF",
+      "width": 3900,
+      "height": 2613,
+      "operations": {
+        "identify": {
+          "median": 0.68,
+          "min": 0.51,
+          "max": 5.71,
+          "samples": [
+            5.71,
+            0.51,
+            0.52,
+            0.68,
+            0.69
+          ]
+        },
+        "thumbnail": {
+          "median": 0.67,
+          "min": 0.62,
+          "max": 0.94,
+          "samples": [
+            0.94,
+            0.68,
+            0.67,
+            0.66,
+            0.62
+          ]
+        },
+        "decode_half_size": {
+          "median": 197.04,
+          "min": 193.75,
+          "max": 203.4,
+          "samples": [
+            194.99,
+            197.04,
+            203.4,
+            203.25,
+            193.75
+          ]
+        },
+        "decode_uq2": {
+          "median": 298.6,
+          "min": 284.61,
+          "max": 322.1,
+          "samples": [
+            322.1,
+            286.43,
+            298.71,
+            298.6,
+            284.61
+          ]
+        },
+        "decode_uq3": {
+          "median": 405.83,
+          "min": 386.35,
+          "max": 412.01,
+          "samples": [
+            408.59,
+            405.83,
+            387,
+            386.35,
+            412.01
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.11,
+        "unpack": 161,
+        "process": 193.27,
+        "copy": 32.85,
+        "total": 387.23
+      }
+    },
+    {
+      "file": "DSC_4986.NEF",
+      "width": 3900,
+      "height": 2613,
+      "operations": {
+        "identify": {
+          "median": 0.38,
+          "min": 0.36,
+          "max": 1.53,
+          "samples": [
+            1.53,
+            0.4,
+            0.38,
+            0.38,
+            0.36
+          ]
+        },
+        "thumbnail": {
+          "median": 0.19,
+          "min": 0.16,
+          "max": 0.27,
+          "samples": [
+            0.25,
+            0.19,
+            0.27,
+            0.18,
+            0.16
+          ]
+        },
+        "decode_half_size": {
+          "median": 191.67,
+          "min": 187.2,
+          "max": 204.29,
+          "samples": [
+            196.17,
+            204.29,
+            187.2,
+            188.03,
+            191.67
+          ]
+        },
+        "decode_uq2": {
+          "median": 285.65,
+          "min": 282.13,
+          "max": 296.78,
+          "samples": [
+            285.65,
+            282.13,
+            296.78,
+            295.08,
+            284.81
+          ]
+        },
+        "decode_uq3": {
+          "median": 398.03,
+          "min": 386.75,
+          "max": 400.3,
+          "samples": [
+            394.43,
+            386.75,
+            398.03,
+            399.71,
+            400.3
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.1,
+        "unpack": 166.79,
+        "process": 192.06,
+        "copy": 32.1,
+        "total": 391.06
+      }
+    },
+    {
+      "file": "IMGP5127.DNG",
+      "width": 4950,
+      "height": 3284,
+      "operations": {
+        "identify": {
+          "median": 0.41,
+          "min": 0.39,
+          "max": 1.31,
+          "samples": [
+            1.31,
+            0.42,
+            0.41,
+            0.39,
+            0.41
+          ]
+        },
+        "thumbnail": {
+          "median": 0.5,
+          "min": 0.42,
+          "max": 1.46,
+          "samples": [
+            1.46,
+            0.42,
+            0.44,
+            0.5,
+            0.53
+          ]
+        },
+        "decode_half_size": {
+          "median": 451.83,
+          "min": 441.64,
+          "max": 478.72,
+          "samples": [
+            451.83,
+            442.55,
+            441.64,
+            478.72,
+            452.82
+          ]
+        },
+        "decode_uq2": {
+          "median": 575.74,
+          "min": 567.52,
+          "max": 604.03,
+          "samples": [
+            604.03,
+            575.74,
+            575.05,
+            589.41,
+            567.52
+          ]
+        },
+        "decode_uq3": {
+          "median": 728.7,
+          "min": 725.27,
+          "max": 751.66,
+          "samples": [
+            725.27,
+            727.72,
+            751.66,
+            728.7,
+            730.6
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.12,
+        "unpack": 406.54,
+        "process": 287.19,
+        "copy": 54.32,
+        "total": 748.16
+      }
+    },
+    {
+      "file": "IMGP5128.DNG",
+      "width": 4950,
+      "height": 3284,
+      "operations": {
+        "identify": {
+          "median": 0.46,
+          "min": 0.44,
+          "max": 0.74,
+          "samples": [
+            0.74,
+            0.48,
+            0.45,
+            0.46,
+            0.44
+          ]
+        },
+        "thumbnail": {
+          "median": 0.41,
+          "min": 0.39,
+          "max": 0.44,
+          "samples": [
+            0.44,
+            0.39,
+            0.41,
+            0.41,
+            0.39
+          ]
+        },
+        "decode_half_size": {
+          "median": 404.4,
+          "min": 401.35,
+          "max": 434.67,
+          "samples": [
+            404.4,
+            403.67,
+            401.35,
+            434.67,
+            432.6
+          ]
+        },
+        "decode_uq2": {
+          "median": 588.75,
+          "min": 581.2,
+          "max": 602.56,
+          "samples": [
+            590.57,
+            588.75,
+            602.56,
+            581.2,
+            583.34
+          ]
+        },
+        "decode_uq3": {
+          "median": 712.63,
+          "min": 698.46,
+          "max": 725.09,
+          "samples": [
+            725.09,
+            712.63,
+            710.12,
+            724.21,
+            698.46
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.11,
+        "unpack": 379.19,
+        "process": 298.24,
+        "copy": 49,
+        "total": 726.53
+      }
+    },
+    {
+      "file": "IMGP5129.DNG",
+      "width": 4950,
+      "height": 3284,
+      "operations": {
+        "identify": {
+          "median": 0.42,
+          "min": 0.4,
+          "max": 1.33,
+          "samples": [
+            1.33,
+            0.44,
+            0.41,
+            0.42,
+            0.4
+          ]
+        },
+        "thumbnail": {
+          "median": 0.43,
+          "min": 0.39,
+          "max": 0.46,
+          "samples": [
+            0.46,
+            0.39,
+            0.45,
+            0.43,
+            0.41
+          ]
+        },
+        "decode_half_size": {
+          "median": 433.16,
+          "min": 432.57,
+          "max": 437.13,
+          "samples": [
+            433.16,
+            432.57,
+            434.28,
+            437.13,
+            433.14
+          ]
+        },
+        "decode_uq2": {
+          "median": 604.81,
+          "min": 595.78,
+          "max": 611.73,
+          "samples": [
+            611.73,
+            595.78,
+            603.86,
+            609.5,
+            604.81
+          ]
+        },
+        "decode_uq3": {
+          "median": 715.53,
+          "min": 705.78,
+          "max": 734.7,
+          "samples": [
+            715.53,
+            714.85,
+            731.57,
+            734.7,
+            705.78
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.1,
+        "unpack": 358.49,
+        "process": 284.95,
+        "copy": 51.73,
+        "total": 695.27
+      }
+    },
+    {
+      "file": "P3210619.ORF",
+      "width": 4014,
+      "height": 3016,
+      "operations": {
+        "identify": {
+          "median": 0.54,
+          "min": 0.45,
+          "max": 1.2,
+          "samples": [
+            1.2,
+            0.45,
+            0.54,
+            0.47,
+            0.55
+          ]
+        },
+        "thumbnail": {
+          "median": 0.37,
+          "min": 0.34,
+          "max": 0.44,
+          "samples": [
+            0.41,
+            0.37,
+            0.36,
+            0.44,
+            0.34
+          ]
+        },
+        "decode_half_size": {
+          "median": 381.1,
+          "min": 358.11,
+          "max": 395.36,
+          "samples": [
+            358.11,
+            360.32,
+            395.36,
+            381.1,
+            394.28
+          ]
+        },
+        "decode_uq2": {
+          "median": 519.93,
+          "min": 507.8,
+          "max": 526.84,
+          "samples": [
+            526.84,
+            524.02,
+            519.93,
+            509.71,
+            507.8
+          ]
+        },
+        "decode_uq3": {
+          "median": 615.6,
+          "min": 605.58,
+          "max": 629.62,
+          "samples": [
+            629.62,
+            615.6,
+            608.99,
+            619.6,
+            605.58
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.13,
+        "unpack": 356.86,
+        "process": 217.7,
+        "copy": 40.39,
+        "total": 615.07
+      }
+    },
+    {
+      "file": "P3210620.ORF",
+      "width": 4014,
+      "height": 3016,
+      "operations": {
+        "identify": {
+          "median": 0.46,
+          "min": 0.44,
+          "max": 1.29,
+          "samples": [
+            1.29,
+            0.44,
+            0.47,
+            0.46,
+            0.46
+          ]
+        },
+        "thumbnail": {
+          "median": 0.39,
+          "min": 0.36,
+          "max": 0.41,
+          "samples": [
+            0.41,
+            0.37,
+            0.39,
+            0.39,
+            0.36
+          ]
+        },
+        "decode_half_size": {
+          "median": 381.85,
+          "min": 380.57,
+          "max": 418,
+          "samples": [
+            418,
+            390.11,
+            381.2,
+            380.57,
+            381.85
+          ]
+        },
+        "decode_uq2": {
+          "median": 575.47,
+          "min": 572.25,
+          "max": 588.93,
+          "samples": [
+            573.36,
+            572.25,
+            575.47,
+            582.65,
+            588.93
+          ]
+        },
+        "decode_uq3": {
+          "median": 676.49,
+          "min": 655.64,
+          "max": 687.89,
+          "samples": [
+            669.02,
+            681.9,
+            687.89,
+            676.49,
+            655.64
+          ]
+        }
+      },
+      "stages": {
+        "open": 0.12,
+        "unpack": 336.96,
+        "process": 227.58,
+        "copy": 72.58,
+        "total": 637.23
+      }
+    }
+  ]
+}

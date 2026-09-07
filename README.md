@@ -311,6 +311,28 @@ see the [Concurrency and threads](#concurrency-and-threads) section above:
 LIBRAW_TEST_IMAGES=/path/to/raw/files npm run test:stress
 ```
 
+## Benchmark
+
+`scripts/bench.cjs` (T25) times `identify()`, `thumbnail()`, and `decode()` at three settings
+(`half_size + user_qual: 2`, `user_qual: 2`, `user_qual: 3`) against every RAW file in a directory, plus a
+`decodeSync(..., { stages: true })` per-stage breakdown at `user_qual: 2`. Each operation runs once as a
+warm-up, then `--iterations` times (default 5) sequentially — never overlapping, so the reported numbers
+are single-job latencies, not throughput:
+
+```bash
+LIBRAW_TEST_IMAGES=/path/to/raw/files npm run bench -- "$LIBRAW_TEST_IMAGES"
+npm run bench -- <dir-or-file...> [--iterations N] [--json <path>] [--no-write] [--host <name>]
+```
+
+The printed table shows, per file, its dimensions and the median time for each operation, followed by the
+per-stage breakdown table (`open`/`unpack`/`process`/`copy`); an environment header above both records the
+package and LibRaw versions, `buildInfo.openmp`/compiler, CPU count and model, `OMP_NUM_THREADS`,
+`UV_THREADPOOL_SIZE`, and the Node/platform/arch this run used. Unless `--no-write` is given, the full
+results (median/min/max and every raw sample, paths anonymised to basenames) are also written to
+`bench/<date>-<host>.json`. See [`bench/`](./bench/) for committed results from this project's development
+machine, and `docs/explanation/adoption-comparison.md` for how these numbers compare to the
+pre-migration estimates.
+
 ## Releasing
 
 Releases are cut from a clean `main` with `scripts/release.sh` (T23), then published by CI:
